@@ -1,0 +1,37 @@
+# User data / secrets
+users/users.db
+*.db
+
+# Runtime data
+runtime/
+
+# Logs
+logs/
+
+# Local backups
+backup/
+backups/
+*.tar.gz
+*.gz
+
+# SSL / private keys
+*.pem
+*.key
+
+# Local configuration / secrets
+.env
+.env.*
+*.secret
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Old backup scripts
+bin/*.backup
+bin/*.backup*
