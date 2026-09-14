@@ -177,6 +177,7 @@ REQUIRED_PACKAGES=(
     unzip
     ca-certificates
     gnupg
+    openssl
     iproute2
     lsof
     net-tools
@@ -276,6 +277,89 @@ mkdir -p "$APP_DIR/runtime"
 mkdir -p "$APP_DIR/users"
 
 # ==================================================
+# XRAY INSTALLATION
+# ==================================================
+
+install_xray() {
+    echo
+    echo "=============================================="
+    echo "             XRAY INSTALLATION"
+    echo "=============================================="
+    echo
+
+    if command -v xray >/dev/null 2>&1; then
+        echo "[INFO] Xray sudah terpasang."
+        echo "[INFO] Version:"
+        xray version | head -n 1
+        echo
+        echo "[INFO] Installer tidak akan menimpa Xray yang sudah ada."
+        return 0
+    fi
+
+    echo "[INFO] Xray belum terpasang."
+    echo "[INFO] Menggunakan installer resmi XTLS/Xray-install."
+    echo
+
+    curl -fsSL \
+        https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh \
+        -o /tmp/nagara-xray-install.sh
+
+    chmod 700 /tmp/nagara-xray-install.sh
+
+    bash /tmp/nagara-xray-install.sh
+
+    rm -f /tmp/nagara-xray-install.sh
+
+    if [ ! -x /usr/local/bin/xray ]; then
+        echo
+        echo "ERROR: Binary Xray tidak ditemukan setelah instalasi."
+        exit 1
+    fi
+
+    mkdir -p /usr/local/etc/xray
+
+    echo
+    echo "[OK] Xray berhasil dipasang."
+    xray version | head -n 1
+}
+
+# ==================================================
+# NGINX + CERTBOT INSTALLATION
+# ==================================================
+
+install_nginx_certbot() {
+    echo
+    echo "=============================================="
+    echo "        NGINX + CERTBOT INSTALLATION"
+    echo "=============================================="
+    echo
+
+    echo "[INFO] Memasang Nginx dan Certbot..."
+    apt-get install -y nginx certbot python3-certbot-nginx
+
+    if ! command -v nginx >/dev/null 2>&1; then
+        echo
+        echo "ERROR: Nginx tidak ditemukan setelah instalasi."
+        exit 1
+    fi
+
+    if ! command -v certbot >/dev/null 2>&1; then
+        echo
+        echo "ERROR: Certbot tidak ditemukan setelah instalasi."
+        exit 1
+    fi
+
+    systemctl enable nginx >/dev/null 2>&1 || true
+
+    echo
+    echo "[OK] Nginx terpasang."
+    nginx -v 2>&1
+
+    echo "[OK] Certbot terpasang."
+    certbot --version
+}
+
+# ==================================================
 # DOMAIN CONFIGURATION
 # ==================================================
 
@@ -320,6 +404,27 @@ chmod 700 "$APP_DIR/config"
 
 echo
 echo "=============================================="
+echo "       DOMAIN BERHASIL DIKONFIGURASI"
+echo "=============================================="
+echo
+echo "Domain      : $DOMAIN"
+echo "Nagara dir  : $APP_DIR"
+echo
+
+install_xray
+
+install_nginx_certbot
+
+echo
+echo "=============================================="
+echo "       CONFIGURING XRAY + NGINX + SSL"
+echo "=============================================="
+echo
+
+DOMAIN="$DOMAIN" bash "$APP_DIR/bin/setup-stack.sh"
+
+echo
+echo "=============================================="
 echo "       INSTALLER FOUNDATION SELESAI"
 echo "=============================================="
 echo
@@ -328,9 +433,14 @@ echo "Architecture: $ARCH"
 echo "CPU         : $CPU_CORES core"
 echo "RAM         : ${RAM_MB} MB"
 echo
+echo "Domain      : $DOMAIN"
 echo "Nagara dir  : $APP_DIR"
 echo
+echo "Xray        : $(command -v xray || echo "NOT FOUND")"
+echo "Nginx       : $(command -v nginx || echo "NOT FOUND")"
+echo "Certbot     : $(command -v certbot || echo "NOT FOUND")"
+echo
 echo "Tahap berikutnya:"
-echo "Source Nagara akan dipasang dari GitHub."
+echo "Konfigurasi Xray, Nginx, SSL, dan user manager akan ditambahkan."
 echo
 echo "=============================================="

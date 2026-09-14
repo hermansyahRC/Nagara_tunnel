@@ -1,143 +1,229 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 XRAY_CONFIG="/usr/local/etc/xray/config.json"
 BACKUP_DIR="/opt/nagara-tunnel/backups"
 
 mkdir -p "$BACKUP_DIR"
 
-get_server_ip() {
-    curl -4 -s --max-time 5 https://api.ipify.org || true
-}
+echo
+echo "=============================================="
+echo "       NAGARA TUNNEL XRAY CONFIG"
+echo "=============================================="
+echo
 
-generate_uuid() {
-    cat /proc/sys/kernel/random/uuid
-}
+# --------------------------------------------------
+# CHECK DEPENDENCIES
+# --------------------------------------------------
 
-generate_config() {
-    SERVER_IP="$(get_server_ip)"
+if ! command -v xray >/dev/null 2>&1; then
+    echo "ERROR: Xray belum terpasang."
+    exit 1
+fi
 
-    if [ -z "$SERVER_IP" ]; then
-        echo "Gagal mendapatkan IPv4 publik."
-        exit 1
-    fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq belum terpasang."
+    exit 1
+fi
 
-    VLESS_UUID="$(generate_uuid)"
-    VMESS_UUID="$(generate_uuid)"
-    TROJAN_PASSWORD="$(openssl rand -hex 16)"
+# --------------------------------------------------
+# BACKUP EXISTING CONFIG
+# --------------------------------------------------
 
-    echo
-    echo "=============================================="
-    echo "       NAGARA TUNNEL CONFIG GENERATOR"
-    echo "=============================================="
-    echo
-    echo "Server IP : $SERVER_IP"
-    echo
-    echo "VLESS UUID : $VLESS_UUID"
-    echo "VMESS UUID : $VMESS_UUID"
-    echo "TROJAN KEY : $TROJAN_PASSWORD"
-    echo
+if [ -f "$XRAY_CONFIG" ]; then
+    BACKUP_FILE="$BACKUP_DIR/xray-config-before-generate-$(date +%Y%m%d-%H%M%S).json"
 
-    echo "Membuat backup konfigurasi lama..."
+    cp "$XRAY_CONFIG" "$BACKUP_FILE"
 
-    if [ -f "$XRAY_CONFIG" ]; then
-        cp "$XRAY_CONFIG" \
-        "$BACKUP_DIR/config-$(date +%Y%m%d-%H%M%S).json"
-    fi
+    echo "[OK] Backup konfigurasi:"
+    echo "     $BACKUP_FILE"
+fi
 
-    cat > "$XRAY_CONFIG" <<EOF
+# --------------------------------------------------
+# CREATE BASELINE CONFIG
+# --------------------------------------------------
+
+cat > "$XRAY_CONFIG" <<'EOF'
 {
   "log": {
-    "loglevel": "warning"
+    "loglevel": "warning",
+    "access": "/opt/nagara-tunnel/logs/xray-access.log"
   },
+
+  "api": {
+    "tag": "api",
+    "services": [
+      "HandlerService",
+      "LoggerService",
+      "StatsService"
+    ]
+  },
+
   "inbounds": [
+
+    {
+      "tag": "api",
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      }
+    },
+
     {
       "tag": "vless-in",
-      "listen": "0.0.0.0",
+      "listen": "127.0.0.1",
       "port": 10001,
       "protocol": "vless",
+
       "settings": {
-        "clients": [
-          {
-            "id": "$VLESS_UUID",
-            "email": "nagara-vless"
-          }
-        ],
+        "clients": [],
         "decryption": "none"
       },
+
       "streamSettings": {
-        "network": "tcp"
+        "network": "ws",
+
+        "wsSettings": {
+          "path": "/nagara-ws"
+        }
       }
     },
+
     {
       "tag": "vmess-in",
-      "listen": "0.0.0.0",
+      "listen": "127.0.0.1",
       "port": 10002,
       "protocol": "vmess",
+
       "settings": {
-        "clients": [
-          {
-            "id": "$VMESS_UUID",
-            "email": "nagara-vmess"
-          }
-        ]
+        "clients": []
       },
+
       "streamSettings": {
-        "network": "tcp"
+        "network": "ws",
+
+        "wsSettings": {
+          "path": "/vmess-ws"
+        }
       }
     },
+
     {
       "tag": "trojan-in",
       "listen": "0.0.0.0",
       "port": 10003,
       "protocol": "trojan",
+
       "settings": {
-        "clients": [
-          {
-            "password": "$TROJAN_PASSWORD",
-            "email": "nagara-trojan"
-          }
-        ]
+        "clients": []
       },
+
       "streamSettings": {
         "network": "tcp"
       }
+    },
+
+    {
+      "tag": "vmess-grpc-in",
+      "listen": "127.0.0.1",
+      "port": 10004,
+      "protocol": "vmess",
+
+      "settings": {
+        "clients": []
+      },
+
+      "streamSettings": {
+        "network": "grpc",
+
+        "grpcSettings": {
+          "serviceName": "vmess-grpc"
+        }
+      }
     }
+
   ],
+
   "outbounds": [
     {
       "protocol": "freedom",
       "tag": "direct"
     },
+
     {
       "protocol": "blackhole",
       "tag": "block"
+    },
+
+    {
+      "protocol": "freedom",
+      "tag": "api"
     }
-  ]
+  ],
+
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "api"
+        ],
+        "outboundTag": "api"
+      }
+    ]
+  }
 }
 EOF
 
-    echo
-    echo "Memeriksa konfigurasi Xray..."
-    xray run -test -config "$XRAY_CONFIG"
+# --------------------------------------------------
+# PERMISSIONS
+# --------------------------------------------------
 
-    echo
-    echo "=============================================="
-    echo "       KONFIGURASI BERHASIL DIBUAT"
-    echo "=============================================="
-    echo
-    echo "VLESS : $VLESS_UUID"
-    echo "VMESS : $VMESS_UUID"
-    echo "TROJAN: $TROJAN_PASSWORD"
-    echo
-    echo "Port:"
-    echo "VLESS  = 10001"
-    echo "VMess  = 10002"
-    echo "Trojan = 10003"
-    echo
-    echo "CATAT UUID/password di atas."
-    echo "=============================================="
-}
+chown nobody:nogroup "$XRAY_CONFIG"
+chmod 640 "$XRAY_CONFIG"
 
-generate_config
+# --------------------------------------------------
+# VALIDATE JSON
+# --------------------------------------------------
+
+echo
+echo "[INFO] Memeriksa JSON..."
+
+if ! jq empty "$XRAY_CONFIG"; then
+    echo
+    echo "ERROR: JSON Xray tidak valid."
+    exit 1
+fi
+
+# --------------------------------------------------
+# VALIDATE XRAY CONFIG
+# --------------------------------------------------
+
+echo
+echo "[INFO] Memeriksa konfigurasi Xray..."
+
+if ! xray run -test -config "$XRAY_CONFIG"; then
+    echo
+    echo "ERROR: Konfigurasi Xray tidak valid."
+    exit 1
+fi
+
+echo
+echo "=============================================="
+echo "       KONFIGURASI XRAY BERHASIL"
+echo "=============================================="
+echo
+echo "VLESS WS    : 127.0.0.1:10001 /nagara-ws"
+echo "VMess WS    : 127.0.0.1:10002 /vmess-ws"
+echo "Trojan TCP  : 0.0.0.0:10003"
+echo "VMess gRPC  : 127.0.0.1:10004 /vmess-grpc"
+echo
+echo "API         : 127.0.0.1:10085"
+echo
+echo "User        : dikelola melalui users.db"
+echo "Credential  : tidak dibuat oleh script ini"
+echo
+echo "=============================================="
