@@ -159,6 +159,7 @@ else
     exit 1
 fi
 
+
 # ==================================================
 # APT UPDATE
 # ==================================================
@@ -201,6 +202,46 @@ REQUIRED_PACKAGES=(
 )
 
 apt-get install -y "${REQUIRED_PACKAGES[@]}"
+
+# ==================================================
+# DOWNLOAD NAGARA SOURCE
+# ==================================================
+
+SOURCE_TMP="/tmp/nagara-tunnel-source-$$"
+SOURCE_ARCHIVE="$SOURCE_TMP/source.tar.gz"
+
+cleanup_source() {
+    rm -rf "$SOURCE_TMP"
+}
+
+trap cleanup_source EXIT
+
+echo
+echo "[OK] Menyiapkan source Nagara Tunnel..."
+
+mkdir -p "$SOURCE_TMP"
+
+echo "Mengunduh source dari GitHub..."
+
+curl -fL --retry 3 --connect-timeout 10 \
+    "$GITHUB_TARBALL" \
+    -o "$SOURCE_ARCHIVE"
+
+echo "[OK] Source berhasil diunduh."
+
+echo "Mengekstrak source..."
+
+tar -xzf "$SOURCE_ARCHIVE" -C "$SOURCE_TMP"
+
+SOURCE_DIR="$(find "$SOURCE_TMP" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+
+if [ -z "$SOURCE_DIR" ] || [ ! -d "$SOURCE_DIR" ]; then
+    echo "ERROR: Struktur source GitHub tidak valid."
+    exit 1
+fi
+
+echo "[OK] Source berhasil diekstrak."
+echo "Source : $SOURCE_DIR"
 
 # ==================================================
 # CREATE APP DIRECTORY
