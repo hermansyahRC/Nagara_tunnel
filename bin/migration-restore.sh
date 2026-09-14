@@ -15,7 +15,7 @@ RESTORE_DIR="/tmp/nagara-restore-$(date +%Y%m%d-%H%M%S)"
 set -e
 
 echo "=============================================="
-echo "       NAGARA TUNNEL MIGRATION RESTORE v1"
+echo "       NAGARA TUNNEL MIGRATION RESTORE v2"
 echo "=============================================="
 echo
 echo "Domain saat ini : $DOMAIN"
@@ -44,44 +44,65 @@ echo "$LATEST_BACKUP"
 echo
 
 if [ "$DRY_RUN" = true ]; then
-    echo
     echo "=============================================="
     echo "          DRY-RUN MODE AKTIF"
     echo "=============================================="
     echo
-    echo "Backup ditemukan dan akan diperiksa."
-    echo "Tidak ada file aktif yang akan diubah."
+    echo "Backup akan diperiksa."
+    echo "Tidak ada konfigurasi aktif yang diubah."
     echo "Tidak ada service yang direstart."
     echo
 
     rm -rf "$RESTORE_DIR"
     mkdir -p "$RESTORE_DIR"
 
+    echo "Mengekstrak backup sementara..."
     tar -xzf "$LATEST_BACKUP" -C "$RESTORE_DIR"
 
-    echo "Memeriksa struktur backup..."
+    echo
+    echo "Struktur backup:"
+    echo
 
-    [ -f "$RESTORE_DIR/nagara-tunnel/users/users.db" ] \
+    test -f "$RESTORE_DIR/nagara-tunnel/users/users.db" \
         && echo "OK: users.db" \
-        || { echo "ERROR: users.db tidak ditemukan."; exit 1; }
+        || { echo "ERROR: users.db tidak ditemukan."; rm -rf "$RESTORE_DIR"; exit 1; }
 
-    [ -f "$RESTORE_DIR/xray/config.json" ] \
+    test -f "$RESTORE_DIR/xray/config.json" \
         && echo "OK: Xray config" \
-        || { echo "ERROR: Xray config tidak ditemukan."; exit 1; }
+        || { echo "ERROR: Xray config tidak ditemukan."; rm -rf "$RESTORE_DIR"; exit 1; }
 
-    [ -f "$RESTORE_DIR/nginx/nagara-tunnel" ] \
+    test -f "$RESTORE_DIR/xray/xray.service" \
+        && echo "OK: Xray service" \
+        || { echo "ERROR: Xray service tidak ditemukan."; rm -rf "$RESTORE_DIR"; exit 1; }
+
+    test -f "$RESTORE_DIR/nginx/nagara-tunnel" \
         && echo "OK: Nginx config" \
-        || { echo "ERROR: Nginx config tidak ditemukan."; exit 1; }
+        || { echo "ERROR: Nginx config tidak ditemukan."; rm -rf "$RESTORE_DIR"; exit 1; }
 
-    [ -d "$RESTORE_DIR/ssl/$DOMAIN" ] \
-        && echo "OK: SSL $DOMAIN" \
-        || echo "WARNING: SSL tidak ditemukan."
+    test -d "$RESTORE_DIR/letsencrypt/live/$DOMAIN" \
+        && echo "OK: SSL live" \
+        || echo "WARNING: SSL live tidak ditemukan."
+
+    test -d "$RESTORE_DIR/letsencrypt/archive/$DOMAIN" \
+        && echo "OK: SSL archive" \
+        || echo "WARNING: SSL archive tidak ditemukan."
+
+    if [ -d "$RESTORE_DIR/xray/drop-ins" ]; then
+        echo "OK: Xray systemd drop-ins"
+    else
+        echo "WARNING: Xray systemd drop-ins tidak ditemukan."
+    fi
 
     echo
-    echo "DRY-RUN SELESAI."
-    echo "Tidak ada konfigurasi aktif yang diubah."
-
     rm -rf "$RESTORE_DIR"
+
+    echo "=============================================="
+    echo "           DRY-RUN SELESAI"
+    echo "=============================================="
+    echo
+    echo "Tidak ada konfigurasi aktif yang diubah."
+    echo "Tidak ada service yang direstart."
+
     exit 0
 fi
 
@@ -95,6 +116,7 @@ fi
 
 echo
 echo "Menyiapkan restore..."
+
 mkdir -p "$RESTORE_DIR"
 
 echo "Mengekstrak backup..."
@@ -105,32 +127,36 @@ echo
 echo "Backup berhasil diekstrak."
 echo
 
-if [ "$DRY_RUN" = true ]; then
-    echo "=============================================="
-    echo "          DRY-RUN MODE AKTIF"
-    echo "=============================================="
-    echo
-    echo "Backup berhasil diekstrak dan siap diperiksa."
-    echo
-    echo "Tidak ada file aktif yang akan diubah."
-    echo "Tidak ada safety backup yang dibuat."
-    echo "Tidak ada Xray/Nginx yang direstart."
-    echo
-    echo "File penting yang ditemukan:"
-    echo "- User database"
-    echo "- Xray config"
-    echo "- Xray service"
-    echo "- Nginx config"
-    echo "- SSL"
-    echo "- Nagara Tunnel config"
-    echo "- Runtime/session"
-    echo
+echo "Memeriksa struktur backup..."
+
+if [ ! -f "$RESTORE_DIR/nagara-tunnel/users/users.db" ]; then
+    echo "ERROR: users.db tidak ditemukan."
     rm -rf "$RESTORE_DIR"
-    echo "DRY-RUN SELESAI."
-    exit 0
+    exit 1
 fi
 
-echo "Membuat backup keamanan sebelum restore..."
+if [ ! -f "$RESTORE_DIR/xray/config.json" ]; then
+    echo "ERROR: Xray config tidak ditemukan."
+    rm -rf "$RESTORE_DIR"
+    exit 1
+fi
+
+if [ ! -f "$RESTORE_DIR/xray/xray.service" ]; then
+    echo "ERROR: Xray service tidak ditemukan."
+    rm -rf "$RESTORE_DIR"
+    exit 1
+fi
+
+if [ ! -f "$RESTORE_DIR/nginx/nagara-tunnel" ]; then
+    echo "ERROR: Nginx config tidak ditemukan."
+    rm -rf "$RESTORE_DIR"
+    exit 1
+fi
+
+echo "Struktur backup utama OK."
+echo
+
+echo "Membuat safety backup sebelum restore..."
 
 SAFETY_BACKUP="$BASE/backups/pre-restore-$(date +%Y%m%d-%H%M%S).tar.gz"
 
@@ -146,38 +172,12 @@ tar -czf "$SAFETY_BACKUP" \
     check-system.sh \
     bin 2>/dev/null || true
 
+chmod 600 "$SAFETY_BACKUP"
+
 echo
 echo "Safety backup:"
 echo "$SAFETY_BACKUP"
 echo
-
-echo "Memeriksa struktur backup..."
-
-if [ ! -f "$RESTORE_DIR/nagara-tunnel/users/users.db" ]; then
-    echo "ERROR: users.db tidak ditemukan."
-    echo "Restore dihentikan."
-    rm -rf "$RESTORE_DIR"
-    exit 1
-fi
-
-if [ ! -f "$RESTORE_DIR/xray/config.json" ]; then
-    echo "ERROR: Xray config tidak ditemukan."
-    echo "Restore dihentikan."
-    rm -rf "$RESTORE_DIR"
-    exit 1
-fi
-
-if [ ! -f "$RESTORE_DIR/nginx/nagara-tunnel" ]; then
-    echo "ERROR: Nginx config tidak ditemukan."
-    echo "Restore dihentikan."
-    rm -rf "$RESTORE_DIR"
-    exit 1
-fi
-
-echo "Struktur backup OK."
-echo
-
-echo "Restore konfigurasi Nagara Tunnel..."
 
 echo "Restore konfigurasi Nagara Tunnel..."
 
@@ -193,7 +193,9 @@ cp -a "$RESTORE_DIR/nagara-tunnel/install.sh" \
 cp -a "$RESTORE_DIR/nagara-tunnel/check-system.sh" \
     "$BASE/check-system.sh"
 
+echo "Konfigurasi utama berhasil dipulihkan."
 echo
+
 echo "Restore user database..."
 
 mkdir -p "$BASE/users"
@@ -203,7 +205,9 @@ cp -a "$RESTORE_DIR/nagara-tunnel/users/users.db" \
 
 chmod 600 "$BASE/users/users.db"
 
+echo "User database berhasil dipulihkan."
 echo
+
 echo "Restore script Nagara Tunnel..."
 
 mkdir -p "$BASE/bin"
@@ -211,9 +215,13 @@ mkdir -p "$BASE/bin"
 cp -a "$RESTORE_DIR/nagara-tunnel/bin/." \
     "$BASE/bin/"
 
+chown -R root:root "$BASE/bin"
+
 chmod +x "$BASE/bin/"*.sh 2>/dev/null || true
 
+echo "Script Nagara Tunnel berhasil dipulihkan."
 echo
+
 echo "Restore runtime..."
 
 mkdir -p "$BASE/runtime"
@@ -223,11 +231,13 @@ if [ -d "$RESTORE_DIR/nagara-tunnel/runtime" ]; then
         "$BASE/runtime/"
 fi
 
-echo
-echo "Konfigurasi Nagara Tunnel berhasil dipulihkan."
+echo "Runtime berhasil dipulihkan."
 echo
 
+echo "=============================================="
 echo "Restore konfigurasi Xray..."
+echo "=============================================="
+echo
 
 mkdir -p /usr/local/etc/xray
 
@@ -237,112 +247,245 @@ cp -a "$RESTORE_DIR/xray/config.json" \
 cp -a "$RESTORE_DIR/xray/xray.service" \
     /etc/systemd/system/xray.service
 
+echo "Xray config berhasil dipulihkan."
+echo "Xray service berhasil dipulihkan."
 echo
+
+echo "Restore Xray systemd drop-ins..."
+
+if [ -d "$RESTORE_DIR/xray/drop-ins" ]; then
+
+    mkdir -p /etc/systemd/system/xray.service.d
+
+    cp -a "$RESTORE_DIR/xray/drop-ins/." \
+        /etc/systemd/system/xray.service.d/
+
+    echo "Xray systemd drop-ins berhasil dipulihkan."
+
+else
+
+    echo "Tidak ada Xray systemd drop-ins."
+
+fi
+
+echo
+
+echo "Reload systemd..."
+
+systemctl daemon-reload
+
+echo "Systemd berhasil di-reload."
+echo
+
+echo "=============================================="
 echo "Restore konfigurasi Nginx..."
+echo "=============================================="
+echo
 
 mkdir -p /etc/nginx/sites-available
+mkdir -p /etc/nginx/sites-enabled
 
 cp -a "$RESTORE_DIR/nginx/nagara-tunnel" \
     /etc/nginx/sites-available/nagara-tunnel
 
+echo "Nginx config berhasil dipulihkan."
+
 if [ -f "$RESTORE_DIR/nginx/nagara-tunnel-enabled" ]; then
-    mkdir -p /etc/nginx/sites-enabled
 
     cp -a "$RESTORE_DIR/nginx/nagara-tunnel-enabled" \
         /etc/nginx/sites-enabled/nagara-tunnel
+
+    echo "Nginx enabled config berhasil dipulihkan."
+
+else
+
+    echo "WARNING: Nginx enabled config tidak ditemukan."
+
 fi
 
 echo
-echo "Konfigurasi Xray dan Nginx berhasil dipulihkan."
+
+echo "=============================================="
+echo "Restore Let's Encrypt SSL..."
+echo "=============================================="
 echo
 
-echo "Restore SSL..."
+mkdir -p /etc/letsencrypt/live
+mkdir -p /etc/letsencrypt/archive
 
-if [ -d "$RESTORE_DIR/ssl/$DOMAIN" ]; then
-    mkdir -p /etc/letsencrypt/live
-    mkdir -p /etc/letsencrypt/archive
+if [ -d "$RESTORE_DIR/letsencrypt/archive/$DOMAIN" ]; then
 
-    cp -a "$RESTORE_DIR/ssl/$DOMAIN" \
-        "/etc/letsencrypt/live/"
+    echo "Memulihkan SSL archive..."
 
-    cp -a "$RESTORE_DIR/ssl/$DOMAIN" \
+    if [ -d "/etc/letsencrypt/archive/$DOMAIN" ]; then
+        mv "/etc/letsencrypt/archive/$DOMAIN" \
+           "/etc/letsencrypt/archive/${DOMAIN}.old-$(date +%Y%m%d-%H%M%S)"
+    fi
+
+    cp -a "$RESTORE_DIR/letsencrypt/archive/$DOMAIN" \
         "/etc/letsencrypt/archive/"
 
-    echo "SSL certificate dan private key berhasil dipulihkan."
+    echo "SSL archive berhasil dipulihkan."
+
 else
-    echo "WARNING: SSL certificate untuk $DOMAIN tidak ditemukan."
+
+    echo "WARNING: SSL archive tidak ditemukan."
+
+fi
+
+if [ -d "$RESTORE_DIR/letsencrypt/live/$DOMAIN" ]; then
+
+    echo
+    echo "Memulihkan SSL live..."
+
+    if [ -e "/etc/letsencrypt/live/$DOMAIN" ]; then
+        mv "/etc/letsencrypt/live/$DOMAIN" \
+           "/etc/letsencrypt/live/${DOMAIN}.old-$(date +%Y%m%d-%H%M%S)"
+    fi
+
+    cp -a "$RESTORE_DIR/letsencrypt/live/$DOMAIN" \
+        "/etc/letsencrypt/live/"
+
+    echo "SSL live berhasil dipulihkan."
+
+else
+
+    echo "WARNING: SSL live tidak ditemukan."
+
 fi
 
 echo
-echo "Memperbaiki permission..."
+echo "Memeriksa struktur SSL..."
 
-chown -R root:root "$BASE/config" "$BASE/bin"
+if [ -L "/etc/letsencrypt/live/$DOMAIN/cert.pem" ]; then
+    echo "OK: cert.pem adalah symlink"
+else
+    echo "WARNING: cert.pem bukan symlink"
+fi
+
+if [ -L "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]; then
+    echo "OK: privkey.pem adalah symlink"
+else
+    echo "WARNING: privkey.pem bukan symlink"
+fi
+
+if [ -L "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "OK: fullchain.pem adalah symlink"
+else
+    echo "WARNING: fullchain.pem bukan symlink"
+fi
+
+echo
+
+echo "=============================================="
+echo "Finalisasi restore..."
+echo "=============================================="
+echo
+
+echo "[1/6] Memperbaiki permission..."
+
+chown -R root:root "$BASE"
+
+chmod 600 "$BASE/users/users.db"
 
 chmod +x "$BASE/menu.sh"
 chmod +x "$BASE/install.sh"
 chmod +x "$BASE/check-system.sh"
+
 chmod +x "$BASE/bin/"*.sh 2>/dev/null || true
 
-if [ -f "$BASE/users/users.db" ]; then
-    chmod 600 "$BASE/users/users.db"
+if [ -d "/etc/letsencrypt/archive/$DOMAIN" ]; then
+    chmod 700 "/etc/letsencrypt/archive/$DOMAIN"
+    chmod 600 "/etc/letsencrypt/archive/$DOMAIN/"*.pem
 fi
 
-echo
-echo "=============================================="
-echo "       VALIDASI KONFIGURASI"
-echo "=============================================="
+echo "Permission selesai."
 echo
 
-echo "[1/3] Validasi Xray..."
+echo "[2/6] Memeriksa Xray..."
 
 if xray run -test -config /usr/local/etc/xray/config.json; then
-    echo "Xray config: OK"
+    echo "OK: konfigurasi Xray valid."
 else
-    echo "ERROR: Xray config tidak valid."
-    echo "Restore dihentikan sebelum restart service."
+    echo "ERROR: konfigurasi Xray tidak valid."
+    echo
+    echo "Restore dihentikan."
+    rm -rf "$RESTORE_DIR"
     exit 1
 fi
 
 echo
-echo "[2/3] Validasi Nginx..."
+
+echo "[3/6] Memeriksa systemd Xray..."
+
+systemctl daemon-reload
+
+if systemctl cat xray >/dev/null 2>&1; then
+    echo "OK: Xray service terdaftar di systemd."
+else
+    echo "ERROR: Xray service tidak terdaftar."
+    rm -rf "$RESTORE_DIR"
+    exit 1
+fi
+
+echo
+
+echo "[4/6] Memeriksa Nginx..."
 
 if nginx -t; then
-    echo "Nginx config: OK"
+    echo "OK: konfigurasi Nginx valid."
 else
-    echo "ERROR: Nginx config tidak valid."
-    echo "Restore dihentikan sebelum restart service."
+    echo "ERROR: konfigurasi Nginx tidak valid."
+    echo
+    echo "Restore dihentikan."
+    rm -rf "$RESTORE_DIR"
     exit 1
 fi
 
 echo
-echo "[3/3] Cek database user..."
 
-USER_COUNT=$(grep -cve '^[[:space:]]*$' "$BASE/users/users.db" 2>/dev/null || true)
+echo "[5/6] Memeriksa SSL..."
 
-echo "Jumlah user ditemukan: $USER_COUNT"
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ] && \
+   [ -f "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]; then
+
+    echo "OK: SSL certificate ditemukan."
+
+else
+
+    echo "WARNING: file SSL tidak lengkap."
+
+fi
 
 echo
-echo "Validasi selesai."
 
-echo
-echo "=============================================="
-echo "     NAGARA TUNNEL RESTORE SELESAI"
-echo "=============================================="
-echo
-echo "Safety backup:"
-echo "$SAFETY_BACKUP"
-echo
-echo "User database:"
-echo "$BASE/users/users.db"
-echo
-echo "Jumlah user:"
-echo "$USER_COUNT"
-echo
-echo "PENTING:"
-echo "Xray dan Nginx BELUM direstart."
-echo "Silakan cek konfigurasi terlebih dahulu."
+echo "[6/6] Menghitung user..."
+
+USER_COUNT=$(awk 'NF && $0 !~ /^#/ {count++} END {print count+0}' \
+    "$BASE/users/users.db")
+
+echo "Jumlah user dalam database: $USER_COUNT"
+
 echo
 
 rm -rf "$RESTORE_DIR"
 
-exit 0
+echo "Temporary restore directory dibersihkan."
+
+echo
+echo "=============================================="
+echo "     NAGARA TUNNEL RESTORE v2 BERHASIL"
+echo "=============================================="
+echo
+echo "User          : $USER_COUNT"
+echo "Domain        : $DOMAIN"
+echo
+echo "Xray           : konfigurasi dipulihkan"
+echo "Nginx          : konfigurasi dipulihkan"
+echo "SSL            : dipulihkan"
+echo "Systemd        : dipulihkan"
+echo
+echo "CATATAN:"
+echo "Xray dan Nginx TIDAK direstart otomatis."
+echo "=============================================="
+echo
