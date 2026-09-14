@@ -135,30 +135,12 @@ echo "[OK] Tidak ada instalasi Nagara sebelumnya."
 echo
 echo "[1/5] Memeriksa koneksi internet..."
 
-if curl -fsI --max-time 10 https://github.com >/dev/null 2>&1; then
-    echo "[OK] Internet tersedia."
+if getent hosts github.com >/dev/null 2>&1; then
+    echo "[OK] DNS/Internet tersedia."
 else
-    echo "ERROR: VPS tidak dapat mengakses GitHub."
+    echo "ERROR: VPS tidak dapat mengakses internet."
     exit 1
 fi
-
-# ==================================================
-# GITHUB SOURCE CHECK
-# ==================================================
-
-echo
-echo "[OK] Memeriksa source Nagara Tunnel di GitHub..."
-
-if curl -fsI --max-time 15 "$GITHUB_TARBALL" >/dev/null 2>&1; then
-    echo "[OK] Source GitHub tersedia."
-else
-    echo "ERROR: Source Nagara Tunnel tidak dapat diakses."
-    echo
-    echo "Repository : $GITHUB_REPO"
-    echo "Branch     : $GITHUB_BRANCH"
-    exit 1
-fi
-
 
 # ==================================================
 # APT UPDATE
@@ -243,6 +225,41 @@ fi
 echo "[OK] Source berhasil diekstrak."
 echo "Source : $SOURCE_DIR"
 
+echo
+echo "Memasang source Nagara Tunnel..."
+
+
+if [ ! -f "$SOURCE_DIR/menu.sh" ]; then
+    echo "ERROR: menu.sh tidak ditemukan di source GitHub."
+    exit 1
+fi
+
+if [ ! -f "$SOURCE_DIR/check-system.sh" ]; then
+    echo "ERROR: check-system.sh tidak ditemukan di source GitHub."
+    exit 1
+fi
+
+if [ ! -d "$SOURCE_DIR/bin" ] || ! compgen -G "$SOURCE_DIR/bin/*.sh" > /dev/null; then
+    echo "ERROR: Direktori bin atau script Nagara tidak lengkap."
+    exit 1
+fi
+
+echo "[OK] Struktur source Nagara valid."
+
+mkdir -p "$APP_DIR"
+mkdir -p "$APP_DIR/bin"
+
+cp "$SOURCE_DIR/menu.sh" "$APP_DIR/menu.sh"
+cp "$SOURCE_DIR/check-system.sh" "$APP_DIR/check-system.sh"
+
+cp "$SOURCE_DIR/bin/"*.sh "$APP_DIR/bin/"
+
+chmod +x "$APP_DIR/menu.sh"
+chmod +x "$APP_DIR/check-system.sh"
+chmod +x "$APP_DIR/bin/"*.sh
+
+echo "[OK] Source Nagara Tunnel terpasang."
+
 # ==================================================
 # CREATE APP DIRECTORY
 # ==================================================
@@ -258,12 +275,44 @@ mkdir -p "$APP_DIR/backups"
 mkdir -p "$APP_DIR/runtime"
 mkdir -p "$APP_DIR/users"
 
+# ==================================================
+# DOMAIN CONFIGURATION
+# ==================================================
+
+echo
+echo "=============================================="
+echo "          DOMAIN CONFIGURATION"
+echo "=============================================="
+echo
+echo "Masukkan domain yang akan digunakan Nagara Tunnel."
+echo "Contoh: vpn.domainkamu.com"
+echo
+
+while true; do
+    read -rp "Domain: " DOMAIN
+
+    DOMAIN="${DOMAIN#http://}"
+    DOMAIN="${DOMAIN#https://}"
+    DOMAIN="${DOMAIN%/}"
+
+    if [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        break
+    fi
+
+    echo
+    echo "ERROR: Format domain tidak valid."
+    echo "Contoh: vpn.domainkamu.com"
+    echo
+done
+
+echo
+echo "[OK] Domain : $DOMAIN"
+
 cat > "$APP_DIR/config/system.conf" <<EOF
 APP_NAME="$APP_NAME"
 APP_DIR="$APP_DIR"
 INSTALL_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
-OS="$OS_NAME"
-ARCH="$ARCH"
+DOMAIN="$DOMAIN"
 EOF
 
 chmod 755 "$APP_DIR"
