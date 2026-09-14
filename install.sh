@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -Eeuo pipefail
 
 APP_NAME="Nagara Tunnel"
 APP_DIR="/opt/nagara-tunnel"
@@ -9,132 +9,213 @@ clear
 
 echo "=============================================="
 echo "              NAGARA TUNNEL"
-echo "              INSTALLER"
+echo "          1-CLICK INSTALLER v2"
 echo "=============================================="
 echo
-echo "Memulai instalasi..."
-echo
+
+# ==================================================
+# ROOT CHECK
+# ==================================================
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "ERROR: Jalankan installer sebagai root."
+    echo "ERROR: Installer harus dijalankan sebagai root."
     exit 1
 fi
 
-echo "[1/5] Update repository..."
+echo "[OK] Root access"
+
+# ==================================================
+# OS DETECTION
+# ==================================================
+
+if [ ! -f /etc/os-release ]; then
+    echo "ERROR: Tidak dapat mendeteksi sistem operasi."
+    exit 1
+fi
+
+. /etc/os-release
+
+OS_ID="${ID:-}"
+OS_VERSION="${VERSION_ID:-}"
+OS_NAME="${PRETTY_NAME:-Unknown}"
+
+echo "[INFO] OS          : $OS_NAME"
+echo "[INFO] Architecture: $(uname -m)"
+echo
+
+case "$OS_ID:$OS_VERSION" in
+    ubuntu:20.04|ubuntu:22.04|ubuntu:24.04)
+        echo "[OK] Ubuntu $OS_VERSION didukung."
+        ;;
+    debian:11|debian:12|debian:13)
+        echo "[OK] Debian $OS_VERSION didukung."
+        ;;
+    *)
+        echo
+        echo "ERROR: OS/version belum didukung."
+        echo "OS terdeteksi: $OS_NAME"
+        echo
+        echo "Didukung:"
+        echo "Ubuntu 20.04 / 22.04 / 24.04"
+        echo "Debian 11 / 12 / 13"
+        exit 1
+        ;;
+esac
+
+# ==================================================
+# ARCHITECTURE CHECK
+# ==================================================
+
+ARCH="$(dpkg --print-architecture)"
+
+case "$ARCH" in
+    amd64)
+        echo "[OK] Architecture amd64."
+        ;;
+    *)
+        echo
+        echo "ERROR: Architecture tidak didukung: $ARCH"
+        echo "Saat ini Nagara Tunnel mendukung amd64."
+        exit 1
+        ;;
+esac
+
+# ==================================================
+# SYSTEM INFORMATION
+# ==================================================
+
+CPU_CORES="$(nproc)"
+RAM_MB="$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)"
+DISK_INFO="$(df -h / | awk 'NR==2 {print $2 " total, " $4 " free"}')"
+
+echo
+echo "----------------------------------------------"
+echo "SYSTEM INFORMATION"
+echo "----------------------------------------------"
+echo "CPU          : $CPU_CORES core"
+echo "RAM          : ${RAM_MB} MB"
+echo "Disk         : $DISK_INFO"
+echo "----------------------------------------------"
+
+# ==================================================
+# EXISTING INSTALLATION CHECK
+# ==================================================
+
+if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/config/system.conf" ]; then
+    echo
+    echo "=============================================="
+    echo "   INSTALASI NAGARA TERDETEKSI"
+    echo "=============================================="
+    echo
+    echo "Lokasi : $APP_DIR"
+    echo
+    echo "Installer tidak akan menimpa instalasi yang ada."
+    echo
+    echo "Untuk upgrade/migration gunakan mekanisme"
+    echo "upgrade atau migration Nagara Tunnel."
+    echo
+    exit 0
+fi
+
+echo
+echo "[OK] Tidak ada instalasi Nagara sebelumnya."
+
+# ==================================================
+# INTERNET CHECK
+# ==================================================
+
+echo
+echo "[1/5] Memeriksa koneksi internet..."
+
+if curl -fsI --max-time 10 https://github.com >/dev/null 2>&1; then
+    echo "[OK] Internet tersedia."
+else
+    echo "ERROR: VPS tidak dapat mengakses GitHub."
+    exit 1
+fi
+
+# ==================================================
+# APT UPDATE
+# ==================================================
+
+echo
+echo "[2/5] Update repository paket..."
+
+export DEBIAN_FRONTEND=noninteractive
+
 apt-get update
 
-echo "[2/5] Memasang paket dasar..."
-apt-get install -y \
-    curl \
-    wget \
-    unzip \
-    tar \
-    jq \
-    ca-certificates \
-    gnupg \
-    lsof \
-    net-tools \
-    iproute2 \
-    nano
+# ==================================================
+# APT UPGRADE
+# ==================================================
 
-echo "[3/5] Membuat struktur Nagara Tunnel..."
+echo
+echo "[3/5] Upgrade paket sistem..."
+
+apt-get upgrade -y
+
+# ==================================================
+# DEPENDENCY
+# ==================================================
+
+echo
+echo "[4/5] Memasang dependency Nagara Tunnel..."
+
+REQUIRED_PACKAGES=(
+    curl
+    wget
+    jq
+    tar
+    unzip
+    ca-certificates
+    gnupg
+    iproute2
+    lsof
+    net-tools
+    nano
+)
+
+apt-get install -y "${REQUIRED_PACKAGES[@]}"
+
+# ==================================================
+# CREATE APP DIRECTORY
+# ==================================================
+
+echo
+echo "[5/5] Menyiapkan direktori Nagara Tunnel..."
 
 mkdir -p "$APP_DIR"
 mkdir -p "$APP_DIR/bin"
 mkdir -p "$APP_DIR/config"
 mkdir -p "$APP_DIR/logs"
-mkdir -p "$APP_DIR/backup"
-
-echo "[4/5] Membuat informasi instalasi..."
+mkdir -p "$APP_DIR/backups"
+mkdir -p "$APP_DIR/runtime"
+mkdir -p "$APP_DIR/users"
 
 cat > "$APP_DIR/config/system.conf" <<EOF
 APP_NAME="$APP_NAME"
 APP_DIR="$APP_DIR"
 INSTALL_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
+OS="$OS_NAME"
+ARCH="$ARCH"
 EOF
 
-echo "[5/5] Membuat menu dasar..."
-
-cat > "$APP_DIR/menu.sh" <<'EOF'
-#!/usr/bin/env bash
-
-APP_DIR="/opt/nagara-tunnel"
-
-while true; do
-    clear
-
-    echo "=============================================="
-    echo "              NAGARA TUNNEL"
-    echo "              MANAGEMENT MENU"
-    echo "=============================================="
-    echo
-    echo "  1. System Check"
-    echo "  2. Cek Service"
-    echo "  3. Cek Network"
-    echo "  4. Lihat Folder Config"
-    echo "  5. Backup"
-    echo "  0. Exit"
-    echo
-    read -rp "Pilih menu [0-5]: " MENU
-
-    case "$MENU" in
-        1)
-            bash "$APP_DIR/check-system.sh"
-            read -rp "Tekan Enter untuk kembali..."
-            ;;
-        2)
-            echo
-            echo "=== SERVICE STATUS ==="
-            systemctl --no-pager --type=service --state=running | head -20
-            read -rp "Tekan Enter untuk kembali..."
-            ;;
-        3)
-            echo
-            echo "=== NETWORK ==="
-            ip -br addr
-            echo
-            echo "=== LISTENING PORT ==="
-            ss -lntup
-            read -rp "Tekan Enter untuk kembali..."
-            ;;
-        4)
-            echo
-            echo "=== CONFIGURATION ==="
-            ls -lah "$APP_DIR/config"
-            read -rp "Tekan Enter untuk kembali..."
-            ;;
-        5)
-            BACKUP="$APP_DIR/backup/backup-$(date +%Y%m%d-%H%M%S).tar.gz"
-            tar -czf "$BACKUP" "$APP_DIR/config" 2>/dev/null || true
-            echo
-            echo "Backup dibuat:"
-            echo "$BACKUP"
-            read -rp "Tekan Enter untuk kembali..."
-            ;;
-        0)
-            clear
-            exit 0
-            ;;
-        *)
-            echo
-            echo "Pilihan tidak valid."
-            sleep 1
-            ;;
-    esac
-done
-EOF
-
-chmod +x "$APP_DIR/menu.sh"
+chmod 755 "$APP_DIR"
+chmod 700 "$APP_DIR/config"
 
 echo
 echo "=============================================="
-echo "          INSTALASI FONDASI SELESAI"
+echo "       INSTALLER FOUNDATION SELESAI"
 echo "=============================================="
 echo
-echo "Nagara Tunnel sudah dibuat di:"
-echo "$APP_DIR"
+echo "OS          : $OS_NAME"
+echo "Architecture: $ARCH"
+echo "CPU         : $CPU_CORES core"
+echo "RAM         : ${RAM_MB} MB"
 echo
-echo "Menu dapat dijalankan dengan:"
-echo "bash $APP_DIR/menu.sh"
+echo "Nagara dir  : $APP_DIR"
+echo
+echo "Tahap berikutnya:"
+echo "Source Nagara akan dipasang dari GitHub."
 echo
 echo "=============================================="
