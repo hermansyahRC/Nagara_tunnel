@@ -35,3 +35,6 @@ Thumbs.db
 # Old backup scripts
 bin/*.backup
 bin/*.backup*
+
+# Local Nagara configuration
+config/system.conf
