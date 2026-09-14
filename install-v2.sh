@@ -25,6 +25,22 @@ fi
 echo "[OK] Root access"
 
 # ==================================================
+# EXISTING INSTALLATION CHECK
+# ==================================================
+
+if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/config/system.conf" ]; then
+    echo
+    echo "[INFO] Instalasi Nagara Tunnel terdeteksi."
+    echo "Lokasi : $APP_DIR"
+    echo
+    echo "Installer v2 tidak akan menimpa instalasi yang ada."
+    echo "Gunakan mode upgrade/migration secara khusus."
+    exit 0
+fi
+
+echo "[OK] Tidak ada instalasi Nagara Tunnel sebelumnya."
+
+# ==================================================
 # OS DETECTION
 # ==================================================
 
