@@ -5,6 +5,14 @@ set -Eeuo pipefail
 APP_NAME="Nagara Tunnel"
 APP_DIR="/opt/nagara-tunnel"
 
+# ==================================================
+# GITHUB SOURCE
+# ==================================================
+
+GITHUB_REPO="hermansyahRC/Nagara_tunnel"
+GITHUB_BRANCH="main"
+GITHUB_TARBALL="https://github.com/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.tar.gz"
+
 clear
 
 echo "=============================================="
@@ -131,6 +139,23 @@ if curl -fsI --max-time 10 https://github.com >/dev/null 2>&1; then
     echo "[OK] Internet tersedia."
 else
     echo "ERROR: VPS tidak dapat mengakses GitHub."
+    exit 1
+fi
+
+# ==================================================
+# GITHUB SOURCE CHECK
+# ==================================================
+
+echo
+echo "[OK] Memeriksa source Nagara Tunnel di GitHub..."
+
+if curl -fsI --max-time 15 "$GITHUB_TARBALL" >/dev/null 2>&1; then
+    echo "[OK] Source GitHub tersedia."
+else
+    echo "ERROR: Source Nagara Tunnel tidak dapat diakses."
+    echo
+    echo "Repository : $GITHUB_REPO"
+    echo "Branch     : $GITHUB_BRANCH"
     exit 1
 fi
 
