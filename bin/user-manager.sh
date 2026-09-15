@@ -8,7 +8,10 @@ VLESS_LINK="/opt/nagara-tunnel/bin/vless-link.sh"
 VMESS_LINK="/opt/nagara-tunnel/bin/vmess-link.sh"
 
 mkdir -p "$USER_DIR"
+chmod 700 "$USER_DIR"
+
 touch "$USER_FILE"
+chmod 600 "$USER_FILE"
 
 # =========================================================
 # MIGRASI DATABASE LAMA
