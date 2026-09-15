@@ -72,7 +72,17 @@ fi
 UUID=$(echo "$LINE" | cut -d'|' -f3)
 EXPIRED=$(echo "$LINE" | cut -d'|' -f5)
 
-LINK="vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&type=ws&host=${DOMAIN}&path=%2Fnagara-ws&sni=${DOMAIN}#Nagara-${USERNAME}"
+# ==============================================
+# VLESS WS TLS 443
+# ==============================================
+
+LINK_TLS="vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&type=ws&host=${DOMAIN}&path=%2Fnagara-ws&sni=${DOMAIN}#Nagara-${USERNAME}-TLS"
+
+# ==============================================
+# VLESS WS NON-TLS 80
+# ==============================================
+
+LINK_HTTP="vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2Fnagara-ws#Nagara-${USERNAME}-80"
 
 echo
 echo "=============================================="
@@ -81,15 +91,37 @@ echo "=============================================="
 echo
 echo "Username : $USERNAME"
 echo "Domain   : $DOMAIN"
+echo "Expired  : $EXPIRED"
+echo
+
+echo "----------------------------------------------"
+echo "VLESS WEBSOCKET TLS"
+echo "----------------------------------------------"
+echo "Server   : $DOMAIN"
 echo "Port     : 443"
 echo "Security : TLS"
 echo "Network  : WebSocket"
 echo "Path     : /nagara-ws"
 echo "SNI      : $DOMAIN"
-echo "Expired  : $EXPIRED"
 echo
 echo "VLESS LINK:"
 echo
-echo "$LINK"
+echo "$LINK_TLS"
 echo
+
+echo "----------------------------------------------"
+echo "VLESS WEBSOCKET NON-TLS"
+echo "----------------------------------------------"
+echo "Server   : $DOMAIN"
+echo "Port     : 80"
+echo "Security : NONE"
+echo "Network  : WebSocket"
+echo "Path     : /nagara-ws"
+echo "Host     : $DOMAIN"
+echo
+echo "VLESS LINK:"
+echo
+echo "$LINK_HTTP"
+echo
+
 echo "=============================================="
