@@ -1,45 +1,78 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-DB="/opt/nagara-tunnel/users/users.db"
-SERVER_IP=$(curl -4 -s --max-time 5 https://api.ipify.org)
-PORT="80"
-PATH_WS="/nagara-ws"
+BASE="/opt/nagara-tunnel"
+CONFIG="$BASE/config/system.conf"
+DB="$BASE/users/users.db"
 
 clear
 
 echo "=============================================="
-echo "          NAGARA TUNNEL"
-echo "          VLESS LINK GENERATOR"
+echo "          NAGARA TUNNEL - VLESS"
 echo "=============================================="
 echo
+
+if [ ! -f "$CONFIG" ]; then
+    echo "File system.conf tidak ditemukan."
+    exit 1
+fi
+
+source "$CONFIG"
+
+if [ -z "${DOMAIN:-}" ]; then
+    echo "DOMAIN belum dikonfigurasi."
+    exit 1
+fi
 
 if [ ! -f "$DB" ]; then
     echo "Database user tidak ditemukan."
     exit 1
 fi
 
-echo "DAFTAR USER VLESS"
+mapfile -t USERS < <(
+    awk -F'|' '$2=="vless" {print $1}' "$DB"
+)
+
+if [ ${#USERS[@]} -eq 0 ]; then
+    echo "Belum ada user VLESS."
+    exit 1
+fi
+
+echo "Daftar User VLESS:"
 echo "----------------------------------------------"
 
-awk -F'|' '$2=="vless" {
-    printf "%-3s %-20s %-12s\n", NR, $1, $5
-}' "$DB"
+i=1
+for USER in "${USERS[@]}"; do
+    echo "$i. $USER"
+    ((i++))
+done
 
 echo
-read -p "Masukkan username: " USERNAME
+read -r -p "Pilih nomor user: " CHOICE
 
-DATA=$(grep "^${USERNAME}|vless|" "$DB")
+if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || \
+   [ "$CHOICE" -lt 1 ] || \
+   [ "$CHOICE" -gt "${#USERS[@]}" ]; then
+    echo
+    echo "Pilihan tidak valid."
+    exit 1
+fi
 
-if [ -z "$DATA" ]; then
+USERNAME="${USERS[$((CHOICE-1))]}"
+
+LINE=$(awk -F'|' -v u="$USERNAME" \
+    '$1==u && $2=="vless" {print; exit}' "$DB")
+
+if [ -z "$LINE" ]; then
     echo
     echo "User VLESS tidak ditemukan."
     exit 1
 fi
 
-UUID=$(echo "$DATA" | cut -d'|' -f3)
-EXPIRED=$(echo "$DATA" | cut -d'|' -f5)
+UUID=$(echo "$LINE" | cut -d'|' -f3)
+EXPIRED=$(echo "$LINE" | cut -d'|' -f5)
 
-LINK="vless://${UUID}@${SERVER_IP}:${PORT}?encryption=none&security=none&type=ws&path=%2Fnagara-ws&host=${SERVER_IP}#Nagara-${USERNAME}"
+LINK="vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&type=ws&host=${DOMAIN}&path=%2Fnagara-ws&sni=${DOMAIN}#Nagara-${USERNAME}"
 
 echo
 echo "=============================================="
@@ -47,10 +80,12 @@ echo "             VLESS CONFIG"
 echo "=============================================="
 echo
 echo "Username : $USERNAME"
-echo "Server   : $SERVER_IP"
-echo "Port     : $PORT"
+echo "Domain   : $DOMAIN"
+echo "Port     : 443"
+echo "Security : TLS"
 echo "Network  : WebSocket"
 echo "Path     : /nagara-ws"
+echo "SNI      : $DOMAIN"
 echo "Expired  : $EXPIRED"
 echo
 echo "VLESS LINK:"
