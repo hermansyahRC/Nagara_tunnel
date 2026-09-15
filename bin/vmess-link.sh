@@ -98,6 +98,30 @@ EOF
 LINK_WS=$(printf '%s' "$JSON_WS" | base64 -w 0)
 
 # ==============================================
+# VMESS WS NON-TLS 80
+# ==============================================
+
+JSON_HTTP=$(cat <<EOF
+{
+  "v": "2",
+  "ps": "${USERNAME}-VMESS-WS-80",
+  "add": "${DOMAIN}",
+  "port": "80",
+  "id": "${UUID}",
+  "aid": "0",
+  "scy": "auto",
+  "net": "ws",
+  "type": "none",
+  "host": "${DOMAIN}",
+  "path": "/vmess-ws",
+  "tls": ""
+}
+EOF
+)
+
+LINK_HTTP=$(printf '%s' "$JSON_HTTP" | base64 -w 0)
+
+# ==============================================
 # VMESS GRPC TLS 443
 # ==============================================
 
@@ -144,6 +168,20 @@ echo
 echo "VMESS LINK:"
 echo
 echo "$LINK_WS"
+echo
+echo "----------------------------------------------"
+echo "VMESS WEBSOCKET NON-TLS"
+echo "----------------------------------------------"
+echo "Server   : $DOMAIN"
+echo "Port     : 80"
+echo "Security : NONE"
+echo "Network  : WebSocket"
+echo "Path     : /vmess-ws"
+echo "Host     : $DOMAIN"
+echo
+echo "VMESS LINK:"
+echo
+echo "$LINK_HTTP"
 echo
 echo "----------------------------------------------"
 echo "VMESS GRPC TLS"
