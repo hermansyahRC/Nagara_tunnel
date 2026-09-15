@@ -1,7 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 BASE="/opt/nagara-tunnel"
-source "$BASE/config/system.conf"
+CONFIG="$BASE/config/system.conf"
 DB="$BASE/users/users.db"
 
 clear
@@ -11,12 +12,26 @@ echo "          NAGARA TUNNEL - VMESS"
 echo "=============================================="
 echo
 
+if [ ! -f "$CONFIG" ]; then
+    echo "File system.conf tidak ditemukan."
+    exit 1
+fi
+
+source "$CONFIG"
+
+if [ -z "${DOMAIN:-}" ]; then
+    echo "DOMAIN belum dikonfigurasi."
+    exit 1
+fi
+
 if [ ! -f "$DB" ]; then
     echo "Database user tidak ditemukan."
     exit 1
 fi
 
-mapfile -t USERS < <(awk -F'|' '$2=="vmess" {print $1}' "$DB")
+mapfile -t USERS < <(
+    awk -F'|' '$2=="vmess" {print $1}' "$DB"
+)
 
 if [ ${#USERS[@]} -eq 0 ]; then
     echo "Belum ada user VMess."
@@ -24,7 +39,7 @@ if [ ${#USERS[@]} -eq 0 ]; then
 fi
 
 echo "Daftar User VMess:"
-echo
+echo "----------------------------------------------"
 
 i=1
 for USER in "${USERS[@]}"; do
@@ -33,16 +48,26 @@ for USER in "${USERS[@]}"; do
 done
 
 echo
-read -p "Pilih nomor user: " CHOICE
+read -r -p "Pilih nomor user: " CHOICE
 
-if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "${#USERS[@]}" ]; then
+if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || \
+   [ "$CHOICE" -lt 1 ] || \
+   [ "$CHOICE" -gt "${#USERS[@]}" ]; then
+    echo
     echo "Pilihan tidak valid."
     exit 1
 fi
 
 USERNAME="${USERS[$((CHOICE-1))]}"
 
-LINE=$(awk -F'|' -v u="$USERNAME" '$1==u && $2=="vmess" {print; exit}' "$DB")
+LINE=$(awk -F'|' -v u="$USERNAME" \
+    '$1==u && $2=="vmess" {print; exit}' "$DB")
+
+if [ -z "$LINE" ]; then
+    echo
+    echo "User VMess tidak ditemukan."
+    exit 1
+fi
 
 UUID=$(echo "$LINE" | cut -d'|' -f3)
 EXPIRED=$(echo "$LINE" | cut -d'|' -f5)
@@ -51,10 +76,10 @@ EXPIRED=$(echo "$LINE" | cut -d'|' -f5)
 # VMESS WS TLS 443
 # ==============================================
 
-JSON_TLS=$(cat <<EOF2
+JSON_WS=$(cat <<EOF
 {
   "v": "2",
-  "ps": "${USERNAME}-VMESS-TLS",
+  "ps": "${USERNAME}-VMESS-WS-TLS",
   "add": "${DOMAIN}",
   "port": "443",
   "id": "${UUID}",
@@ -67,40 +92,16 @@ JSON_TLS=$(cat <<EOF2
   "tls": "tls",
   "sni": "${DOMAIN}"
 }
-EOF2
+EOF
 )
 
-LINK_TLS=$(echo -n "$JSON_TLS" | base64 -w 0)
-
-# ==============================================
-# VMESS WS 80
-# ==============================================
-
-JSON_HTTP=$(cat <<EOF2
-{
-  "v": "2",
-  "ps": "${USERNAME}-VMESS-80",
-  "add": "${DOMAIN}",
-  "port": "80",
-  "id": "${UUID}",
-  "aid": "0",
-  "scy": "auto",
-  "net": "ws",
-  "type": "none",
-  "host": "${DOMAIN}",
-  "path": "/vmess-ws",
-  "tls": ""
-}
-EOF2
-)
-
-LINK_HTTP=$(echo -n "$JSON_HTTP" | base64 -w 0)
+LINK_WS=$(printf '%s' "$JSON_WS" | base64 -w 0)
 
 # ==============================================
 # VMESS GRPC TLS 443
 # ==============================================
 
-JSON_GRPC=$(cat <<EOF2
+JSON_GRPC=$(cat <<EOF
 {
   "v": "2",
   "ps": "${USERNAME}-VMESS-GRPC",
@@ -116,62 +117,46 @@ JSON_GRPC=$(cat <<EOF2
   "tls": "tls",
   "sni": "${DOMAIN}"
 }
-EOF2
+EOF
 )
 
-LINK_GRPC=$(echo -n "$JSON_GRPC" | base64 -w 0)
-
-# ==============================================
-# OUTPUT
-# ==============================================
+LINK_GRPC=$(printf '%s' "$JSON_GRPC" | base64 -w 0)
 
 echo
 echo "=============================================="
-echo " USER VMESS"
+echo "             VMESS CONFIG"
 echo "=============================================="
+echo
 echo "Username : $USERNAME"
+echo "Domain   : $DOMAIN"
 echo "Expired  : $EXPIRED"
-echo "UUID     : $UUID"
-
-echo
-echo "=============================================="
-echo " VMESS WS TLS 443"
-echo "=============================================="
-echo "Server : $DOMAIN"
-echo "Port   : 443"
-echo "Network: WS"
-echo "Path   : /vmess-ws"
-echo "TLS    : ON"
-echo "SNI    : $DOMAIN"
-echo
-echo "vmess://$LINK_TLS"
-
 echo
 echo "----------------------------------------------"
-echo " VMESS WS 80"
+echo "VMESS WEBSOCKET TLS"
 echo "----------------------------------------------"
-echo "Server : $DOMAIN"
-echo "Port   : 80"
-echo "Network: WS"
-echo "Path   : /vmess-ws"
-echo "TLS    : OFF"
+echo "Server   : $DOMAIN"
+echo "Port     : 443"
+echo "Security : TLS"
+echo "Network  : WebSocket"
+echo "Path     : /vmess-ws"
+echo "SNI      : $DOMAIN"
 echo
-echo "vmess://$LINK_HTTP"
-
+echo "VMESS LINK:"
+echo
+echo "$LINK_WS"
 echo
 echo "----------------------------------------------"
-echo " VMESS GRPC TLS 443"
+echo "VMESS GRPC TLS"
 echo "----------------------------------------------"
-echo "Server : $DOMAIN"
-echo "Port   : 443"
-echo "Network: gRPC"
-echo "Service: vmess-grpc"
-echo "TLS    : ON"
-echo "SNI    : $DOMAIN"
+echo "Server   : $DOMAIN"
+echo "Port     : 443"
+echo "Security : TLS"
+echo "Network  : gRPC"
+echo "Service  : vmess-grpc"
+echo "SNI      : $DOMAIN"
 echo
-echo "vmess://$LINK_GRPC"
-
+echo "VMESS GRPC LINK:"
 echo
-echo "=============================================="
-echo "       SELESAI"
+echo "$LINK_GRPC"
+echo
 echo "=============================================="
