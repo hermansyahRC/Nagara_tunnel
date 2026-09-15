@@ -351,6 +351,19 @@ install_nginx_certbot() {
 
     systemctl enable nginx >/dev/null 2>&1 || true
 
+    mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+
+    cat > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'EOF'
+#!/usr/bin/env bash
+set -e
+
+if systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+fi
+EOF
+
+    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+
     echo
     echo "[OK] Nginx terpasang."
     nginx -v 2>&1
