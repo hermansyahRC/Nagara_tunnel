@@ -259,14 +259,7 @@ while true; do
             ;;
 
         4)
-            clear
-            echo "================================================"
-            echo "              TROJAN MANAGER"
-            echo "================================================"
-            echo
-            echo "Fitur Trojan Manager belum diaktifkan."
-            echo
-            read -rp "Tekan Enter untuk kembali..."
+            "$BASE/bin/trojan-manager.sh"
             ;;
 
         5)
