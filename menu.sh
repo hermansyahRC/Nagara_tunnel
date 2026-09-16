@@ -249,7 +249,7 @@ while true; do
             ;;
 
         2)
-            "$BASE/bin/vless-link.sh"
+            "$BASE/bin/vless-manager.sh"
             read -rp "Tekan Enter untuk kembali..."
             ;;
 
