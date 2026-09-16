@@ -2,29 +2,50 @@
 
 BASE="/opt/nagara-tunnel"
 DB="$BASE/users/users.db"
-
 ACCESS_LOG="$BASE/logs/xray-access.log"
 SESSION_DB="$BASE/runtime/sessions/sessions-v2.db"
-WINDOW=60
 
+WINDOW=300
 DRY_RUN=true
+
+mkdir -p "$BASE/runtime/sessions"
+
 
 get_user_latest_ip() {
     local username="$1"
     local cutoff
+
     cutoff=$(date -d "$WINDOW seconds ago" '+%Y/%m/%d %H:%M:%S')
 
     awk -v user="nagara-$username" -v cutoff="$cutoff" '
     {
         ts=$1 " " $2
+        sub(/\..*$/, "", ts)
 
-        if ($0 !~ ("email: " user)) next
-        if (ts < cutoff) next
+        if ($0 !~ ("email: " user))
+            next
+
+        if (ts < cutoff)
+            next
 
         match($0, /from [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)
 
         if (RSTART > 0) {
-            last_ip=substr($0, RSTART+5, RLENGTH-5)
+            ip=substr($0, RSTART+5, RLENGTH-5)
+
+            if (ip == "127.0.0.1")
+                next
+
+            if (ip ~ /^10\./)
+                next
+
+            if (ip ~ /^192\.168\./)
+                next
+
+            if (ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+                next
+
+            last_ip=ip
             last_ts=ts
         }
     }
@@ -35,12 +56,6 @@ get_user_latest_ip() {
     }
     ' "$ACCESS_LOG"
 }
-mkdir -p "$BASE/runtime/sessions"
-
-echo "=============================================="
-echo "        NAGARA SESSION MANAGER v2"
-echo "=============================================="
-echo
 
 get_user_info() {
     local username="$1"
@@ -62,16 +77,32 @@ get_user_ips() {
 
     awk -v user="$username" -v cutoff="$cutoff" '
     {
+        ts=$1 " " $2
+        sub(/\..*$/, "", ts)
+
         if ($0 !~ ("email: nagara-" user))
             next
 
-        if ($0 < cutoff)
+        if (ts < cutoff)
             next
 
         match($0, /from [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)
 
         if (RSTART > 0) {
             ip=substr($0, RSTART+5, RLENGTH-5)
+
+            if (ip == "127.0.0.1")
+                next
+
+            if (ip ~ /^10\./)
+                next
+
+            if (ip ~ /^192\.168\./)
+                next
+
+            if (ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+                next
+
             ips[ip]=1
         }
     }
@@ -91,6 +122,7 @@ dry_run_enforcement() {
 
     if [ "$DRY_RUN" = "true" ]; then
         local latest_ip
+
         latest_ip=$(get_user_latest_ip "$username")
 
         echo "[DRY-RUN] $username ($protocol) OVERLIMIT: $ip_count/$limit"
@@ -107,9 +139,12 @@ dry_run_enforcement() {
 }
 
 show_users() {
-
-    printf "%-10s %-10s %-10s %-8s %-12s %s\n" \
-        "USER" "PROTOCOL" "IP AKTIF" "LIMIT" "STATE" "IP ADDRESS"
+    online=0
+    offline=0
+    overlimit=0
+    echo "=============================================="
+    echo "        NAGARA CONNECTION MONITOR"
+    printf "%-10s %-8s %-8s %-7s %-12s\n" "USER" "PROTO" "DEVICE" "LIMIT" "STATUS"
 
     echo "--------------------------------------------------------------------------"
 
@@ -133,32 +168,34 @@ show_users() {
 
         if [ "$user_status" != "ACTIVE" ]; then
             state="$user_status"
+
         elif [ "$ip_count" -gt 0 ]; then
+
             if [ "$ip_count" -gt "$limit" ]; then
                 state="OVERLIMIT"
             else
                 state="ONLINE"
             fi
+
         else
             state="OFFLINE"
         fi
+        case "$state" in ONLINE) online=$((online+1));; OFFLINE) offline=$((offline+1));; OVERLIMIT) overlimit=$((overlimit+1));; esac
 
         if [ "$state" = "OVERLIMIT" ]; then
-            dry_run_enforcement "$username" "$protocol_db" "$limit" "$ips" "$ip_count"
+            dry_run_enforcement \
+                "$username" \
+                "$protocol_db" \
+                "$limit" \
+                "$ips" \
+                "$ip_count"
         fi
 
         ip_display=$(printf '%s\n' "$ips" | paste -sd ',' -)
 
         [ -z "$ip_display" ] && ip_display="-"
 
-        printf "%-10s %-10s %-10s %-8s %-12s %s\n" \
-            "$username" \
-            "$protocol_db" \
-            "$ip_count" \
-            "$limit" \
-            "$state" \
-            "$ip_display"
-
+        printf "%-10s %-8s %-8s %-7s %-12s\n" "$username" "$protocol_db" "$ip_count" "$limit" "$state"
         printf "%s|%s|%s|%s|%s|%s|%s\n" \
             "$(date '+%Y-%m-%d %H:%M:%S')" \
             "$username" \
@@ -169,10 +206,22 @@ show_users() {
             "$ip_display" >> "$SESSION_DB"
 
     done < "$DB"
+    echo "--------------------------------------------------------------------------"
+    printf "ONLINE : %s    OFFLINE : %s    OVERLIMIT : %s\n" "$online" "$offline" "$overlimit"
+    echo "--------------------------------------------------------------------------"
+    echo "ACTIVE IP"
+    echo "--------------------------------------------------------------------------"
+    while IFS="|" read -r username protocol credential created expired max_device status; do
+        [ -z "$username" ] && continue
+        ips=$(get_user_ips "$username")
+        if [ -n "$ips" ]; then
+            echo "  $username"
+            printf "%s\n" "$ips" | sed "s/^/  -> /"
+        fi
+    done < "$DB"
+    echo "--------------------------------------------------------------------------"
 }
-
 main() {
-
     show_users
 
     echo

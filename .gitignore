@@ -38,3 +38,10 @@ bin/*.backup*
 
 # Local Nagara configuration
 config/system.conf
+
+# Session manager local UI backups
+bin/session-manager.sh.before-ui-*
+bin/session-manager.sh.before-ui*
+bin/session-manager.sh.broken-ui
+bin/session-manager.sh.final-ui
+bin/session-manager.sh.ui-*
