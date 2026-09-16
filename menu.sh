@@ -448,9 +448,10 @@ while true; do
             echo "                SYSTEM TOOLS"
             echo "================================================"
             echo
-            echo "1. System Information"
-            echo "2. Traffic Monitor"
-            echo "0. Kembali"
+	    echo "1. System Information"
+	    echo "2. Traffic Monitor"
+	    echo "3. Traffic History"
+	    echo "0. Kembali"
             echo
 
             read -rp "Pilih: " SYSTEM_MENU
@@ -458,6 +459,10 @@ while true; do
             case "$SYSTEM_MENU" in
                 2)
                     "$BASE/bin/traffic-monitor.sh"
+                    read -rp "Tekan Enter untuk kembali..."
+                    ;;
+                3)
+                    "$BASE/bin/traffic-history-view.sh"
                     read -rp "Tekan Enter untuk kembali..."
                     ;;
                 1)
