@@ -254,7 +254,7 @@ while true; do
             ;;
 
         3)
-            "$BASE/bin/vmess-link.sh"
+            "$BASE/bin/vmess-manager.sh"
             read -rp "Tekan Enter untuk kembali..."
             ;;
 
