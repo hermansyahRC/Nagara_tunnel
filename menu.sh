@@ -477,7 +477,6 @@ while true; do
             echo
             read -rp "Tekan Enter untuk kembali..."
             ;;
-
         11)
             clear
 
@@ -485,9 +484,66 @@ while true; do
             echo "           SECURITY & FIREWALL"
             echo "================================================"
             echo
-            echo "Security & Firewall belum diaktifkan."
+            echo "1. Status Firewall"
+            echo "2. Lihat Rules"
+            echo "3. Allow Port"
+            echo "4. Deny Port"
+            echo "5. Reload Firewall"
+            echo "6. Firewall Logs"
+            echo "0. Kembali"
             echo
-            read -rp "Tekan Enter untuk kembali..."
+
+            read -rp "Pilih: " FIREWALL_MENU
+
+            case "$FIREWALL_MENU" in
+
+                1)
+                    ufw status verbose
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                2)
+                    ufw status numbered
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                3)
+                    read -rp "Masukkan port yang diizinkan: " FW_PORT
+
+                    if ! [[ "$FW_PORT" =~ ^[0-9]+$ ]] || [ "$FW_PORT" -lt 1 ] || [ "$FW_PORT" -gt 65535 ]; then
+                        echo "Port tidak valid."
+                    elif [[ "$FW_PORT" == "10001" || "$FW_PORT" == "10002" || "$FW_PORT" == "10004" || "$FW_PORT" == "10085" ]]; then
+                        echo "Port internal Xray tidak boleh dibuka."
+                    else
+                        ufw allow "$FW_PORT"/tcp
+                    fi
+
+                    read -rp "Tekan Enter..."
+                    ;;
+                4)
+                    read -rp "Masukkan port yang ditolak: " FW_PORT
+
+                    if ! [[ "$FW_PORT" =~ ^[0-9]+$ ]] || [ "$FW_PORT" -lt 1 ] || [ "$FW_PORT" -gt 65535 ]; then
+                        echo "Port tidak valid."
+                    elif [[ "$FW_PORT" == "22" || "$FW_PORT" == "80" || "$FW_PORT" == "443" || "$FW_PORT" == "10003" ]]; then
+                        echo "Port layanan utama tidak boleh diblokir dari menu."
+                    else
+                        ufw deny "$FW_PORT"/tcp
+                    fi
+
+                    read -rp "Tekan Enter..."
+                    ;;
+                5)
+                    ufw reload
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                6)
+                    journalctl -k | grep -i UFW | tail -50
+                    read -rp "Tekan Enter..."
+                    ;;
+
+            esac
             ;;
 
         12)
