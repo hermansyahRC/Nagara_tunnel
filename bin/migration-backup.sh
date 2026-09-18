@@ -56,24 +56,8 @@ cp -a "$BASE/check-system.sh" \
 
 echo "[3/8] Backup script Nagara Tunnel..."
 
-for file in \
-    user-manager.sh \
-    sync-users.sh \
-    xray-config.sh \
-    vless-link.sh \
-    vmess-link.sh \
-    session-manager.sh \
-    session-tracker.sh \
-    device-monitor.sh \
-    device-monitor-v4.sh \
-    migration-backup.sh \
-    migration-restore.sh
-do
-    if [ -f "$BASE/bin/$file" ]; then
-        cp -a "$BASE/bin/$file" \
-            "$WORK_DIR/nagara-tunnel/bin/"
-    fi
-done
+cp -a "$BASE/bin/." \
+    "$WORK_DIR/nagara-tunnel/bin/"
 
 echo "[4/8] Backup runtime..."
 
