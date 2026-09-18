@@ -473,9 +473,58 @@ while true; do
             echo "              SERVER SETTINGS"
             echo "================================================"
             echo
-            echo "Server Settings belum diaktifkan."
+            echo "1. Server Information"
+            echo "2. Set Hostname"
+            echo "3. Set Timezone"
+            echo "0. Kembali"
             echo
-            read -rp "Tekan Enter untuk kembali..."
+
+            read -rp "Pilih: " SERVER_MENU
+
+            case "$SERVER_MENU" in
+
+                1)
+                    hostnamectl
+                    echo
+                    timedatectl
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                2)
+                    read -rp "Masukkan hostname baru: " NEW_HOSTNAME
+
+                    if [[ "$NEW_HOSTNAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
+                        hostnamectl set-hostname "$NEW_HOSTNAME"
+                        echo "Hostname berhasil diubah."
+                        echo "Hostname sekarang: $(hostname)"
+                    else
+                        echo "Hostname tidak valid."
+                    fi
+
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                3)
+                    echo
+                    echo "Contoh timezone:"
+                    echo "Asia/Jakarta"
+                    echo "Asia/Makassar"
+                    echo "Asia/Jayapura"
+                    echo
+                    read -rp "Masukkan timezone: " NEW_TIMEZONE
+
+                    if timedatectl list-timezones | grep -qx "$NEW_TIMEZONE"; then
+                        timedatectl set-timezone "$NEW_TIMEZONE"
+                        echo "Timezone berhasil diubah."
+                        timedatectl | grep "Time zone"
+                    else
+                        echo "Timezone tidak valid."
+                    fi
+
+                    read -rp "Tekan Enter..."
+                    ;;
+
+            esac
             ;;
         11)
             clear
