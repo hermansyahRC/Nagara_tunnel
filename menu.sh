@@ -476,6 +476,7 @@ while true; do
             echo "1. Server Information"
             echo "2. Set Hostname"
             echo "3. Set Timezone"
+            echo "4. Auto Reboot"
             echo "0. Kembali"
             echo
 
@@ -522,6 +523,30 @@ while true; do
                     fi
 
                     read -rp "Tekan Enter..."
+                    ;;
+			
+		 4)
+
+                    clear
+                    "$BASE/bin/reboot-manager.sh" status
+                    echo
+                    echo "1. Aktifkan / Ubah Interval"
+                    echo "2. Nonaktifkan"
+                    echo "0. Kembali"
+                    echo
+
+                    read -rp "Pilih: " REBOOT_MENU
+
+                    case "$REBOOT_MENU" in
+                        1)
+                            "$BASE/bin/reboot-manager.sh" enable
+                            read -rp "Tekan Enter..."
+                            ;;
+                        2)
+                            "$BASE/bin/reboot-manager.sh" disable
+                            read -rp "Tekan Enter..."
+                            ;;
+                    esac
                     ;;
 
             esac
