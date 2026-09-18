@@ -285,8 +285,14 @@ while true; do
             echo
             echo "1. Status Xray"
             echo "2. Status Nginx"
-            echo "3. Restart Xray"
-            echo "4. Restart Nginx"
+            echo "3. Status Cron"
+            echo "4. Status Semua Service"
+            echo "5. Restart Xray"
+            echo "6. Restart Nginx"
+            echo "7. Restart Cron"
+            echo "8. Restart Semua Service"
+            echo "9. Log Xray"
+            echo "10. Log Nginx"
             echo "0. Kembali"
             echo
 
@@ -305,16 +311,59 @@ while true; do
                     ;;
 
                 3)
-                    systemctl restart xray
-                    echo
-                    systemctl is-active xray
+                    systemctl status cron --no-pager
                     read -rp "Tekan Enter..."
                     ;;
 
                 4)
+                    echo
+                    echo "Xray  : $(systemctl is-active xray)"
+                    echo "Nginx : $(systemctl is-active nginx)"
+                    echo "Cron  : $(systemctl is-active cron)"
+                    echo
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                5)
+                    systemctl restart xray
+                    echo
+                    echo "Xray: $(systemctl is-active xray)"
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                6)
                     systemctl restart nginx
                     echo
-                    systemctl is-active nginx
+                    echo "Nginx: $(systemctl is-active nginx)"
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                7)
+                    systemctl restart cron
+                    echo
+                    echo "Cron: $(systemctl is-active cron)"
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                8)
+                    systemctl restart xray
+                    systemctl restart nginx
+                    systemctl restart cron
+                    echo
+                    echo "Xray  : $(systemctl is-active xray)"
+                    echo "Nginx : $(systemctl is-active nginx)"
+                    echo "Cron  : $(systemctl is-active cron)"
+                    echo
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                9)
+                    journalctl -u xray -n 50 --no-pager
+                    read -rp "Tekan Enter..."
+                    ;;
+
+                10)
+                    journalctl -u nginx -n 50 --no-pager
                     read -rp "Tekan Enter..."
                     ;;
 
