@@ -67,6 +67,10 @@ if [ "$DRY_RUN" = true ]; then
         && echo "OK: users.db" \
         || { echo "ERROR: users.db tidak ditemukan."; rm -rf "$RESTORE_DIR"; exit 1; }
 
+    test -f "$RESTORE_DIR/cron/nagara-traffic" \
+        && echo "OK: Cron nagara-traffic" \
+        || echo "WARNING: Cron nagara-traffic tidak ditemukan."
+
     test -f "$RESTORE_DIR/xray/config.json" \
         && echo "OK: Xray config" \
         || { echo "ERROR: Xray config tidak ditemukan."; rm -rf "$RESTORE_DIR"; exit 1; }
@@ -233,7 +237,30 @@ fi
 
 echo "Runtime berhasil dipulihkan."
 echo
+echo "=============================================="
+echo "Restore Cron..."
+echo "=============================================="
+echo
 
+mkdir -p /etc/cron.d
+
+if [ -f "$RESTORE_DIR/cron/nagara-traffic" ]; then
+
+    cp -a "$RESTORE_DIR/cron/nagara-traffic" \
+        /etc/cron.d/nagara-traffic
+
+    chown root:root /etc/cron.d/nagara-traffic
+    chmod 644 /etc/cron.d/nagara-traffic
+
+    echo "Cron nagara-traffic berhasil dipulihkan."
+
+else
+
+    echo "WARNING: Cron nagara-traffic tidak ditemukan."
+
+fi
+
+echo
 echo "=============================================="
 echo "Restore konfigurasi Xray..."
 echo "=============================================="

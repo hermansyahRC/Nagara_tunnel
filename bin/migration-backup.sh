@@ -29,7 +29,7 @@ mkdir -p "$WORK_DIR/nginx"
 mkdir -p "$WORK_DIR/letsencrypt/live"
 mkdir -p "$WORK_DIR/letsencrypt/archive"
 
-echo "[1/8] Backup user database..."
+echo "[1/9] Backup user database..."
 
 if [ ! -f "$BASE/users/users.db" ]; then
     echo "ERROR: users.db tidak ditemukan."
@@ -40,7 +40,7 @@ fi
 cp -a "$BASE/users/users.db" \
     "$WORK_DIR/nagara-tunnel/users/"
 
-echo "[2/8] Backup konfigurasi Nagara Tunnel..."
+echo "[2/9] Backup konfigurasi Nagara Tunnel..."
 
 cp -a "$BASE/config/system.conf" \
     "$WORK_DIR/nagara-tunnel/config/"
@@ -54,19 +54,31 @@ cp -a "$BASE/install.sh" \
 cp -a "$BASE/check-system.sh" \
     "$WORK_DIR/nagara-tunnel/"
 
-echo "[3/8] Backup script Nagara Tunnel..."
+echo "[3/9] Backup script Nagara Tunnel..."
 
 cp -a "$BASE/bin/." \
     "$WORK_DIR/nagara-tunnel/bin/"
 
-echo "[4/8] Backup runtime..."
+echo "[4/9] Backup runtime..."
 
 if [ -d "$BASE/runtime" ]; then
     cp -a "$BASE/runtime/." \
         "$WORK_DIR/nagara-tunnel/runtime/"
 fi
 
-echo "[5/8] Backup Xray..."
+echo "[5/9] Backup Cron..."
+
+mkdir -p "$WORK_DIR/cron"
+
+if [ -f /etc/cron.d/nagara-traffic ]; then
+    cp -a /etc/cron.d/nagara-traffic \
+        "$WORK_DIR/cron/nagara-traffic"
+    echo "Cron nagara-traffic ditemukan."
+else
+    echo "WARNING: Cron nagara-traffic tidak ditemukan."
+fi
+
+echo "[6/9] Backup Xray..."
 
 if [ ! -f /usr/local/etc/xray/config.json ]; then
     echo "ERROR: Xray config tidak ditemukan."
@@ -91,7 +103,7 @@ if [ -d /etc/systemd/system/xray.service.d ]; then
         "$WORK_DIR/xray/drop-ins/"
 fi
 
-echo "[6/8] Backup konfigurasi Nginx..."
+echo "[7/9] Backup konfigurasi Nginx..."
 
 if [ ! -f /etc/nginx/sites-available/nagara-tunnel ]; then
     echo "ERROR: Nginx config tidak ditemukan."
@@ -107,7 +119,7 @@ if [ -f /etc/nginx/sites-enabled/nagara-tunnel ]; then
         "$WORK_DIR/nginx/nagara-tunnel-enabled"
 fi
 
-echo "[7/8] Backup Let's Encrypt SSL..."
+echo "[8/9] Backup Let's Encrypt SSL..."
 
 if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
     cp -a "/etc/letsencrypt/live/$DOMAIN" \
@@ -136,7 +148,7 @@ if [ -d "$WORK_DIR/letsencrypt/archive/$DOMAIN" ]; then
     echo "OK: letsencrypt/archive/$DOMAIN"
 fi
 
-echo "[8/8] Membuat metadata..."
+echo "[9/9] Membuat metadata..."
 
 cat > "$WORK_DIR/MIGRATION-INFO.txt" <<INFO
 Nagara Tunnel Migration Backup v2
