@@ -45,3 +45,9 @@ bin/session-manager.sh.before-ui*
 bin/session-manager.sh.broken-ui
 bin/session-manager.sh.final-ui
 bin/session-manager.sh.ui-*
+
+# Telegram bot secrets / local backups
+telegram/config.env
+telegram/*.bak
+telegram/*.backup*
+*/__pycache__/
