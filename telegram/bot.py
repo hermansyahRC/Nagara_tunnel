@@ -416,11 +416,77 @@ def handle_callback(callback):
                 USER_STATES.pop(chat_id, None)
                 return
 
-            send_message(
-                chat_id,
-                "✅ USER BERHASIL DIBUAT\n\n"
-                + link_result.stdout.strip()
-            )
+            info = {}
+
+            for line in link_result.stdout.splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    info[key.strip()] = value.strip()
+
+            if protocol == "vless":
+                message = (
+                    "╔══════════════════════════════╗\n"
+                    "║   ✅ USER BERHASIL DIBUAT   ║\n"
+                    "╚══════════════════════════════╝\n\n"
+                    f"👤 Username : {info.get('USERNAME', username)}\n"
+                    f"🔌 Protocol : VLESS\n"
+                    f"📅 Expired  : {info.get('EXPIRED', '-')}\n"
+                    f"📱 Device   : {info.get('MAX_DEVICE', max_device)}\n"
+                    f"📊 Status   : {info.get('STATUS', 'ACTIVE')}\n\n"
+                    "🔐 CONFIG\n\n"
+                    "🟢 VLESS TLS 443\n"
+                    f"{info.get('VLESS_WS_TLS', '-')}\n\n"
+                    "🌐 VLESS HTTP 80\n"
+                    f"{info.get('VLESS_WS_80', '-')}\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "Nagara Tunnel"
+                )
+
+            elif protocol == "vmess":
+                message = (
+                    "╔══════════════════════════════╗\n"
+                    "║   ✅ USER BERHASIL DIBUAT   ║\n"
+                    "╚══════════════════════════════╝\n\n"
+                    f"👤 Username : {info.get('USERNAME', username)}\n"
+                    f"🔌 Protocol : VMESS\n"
+                    f"📅 Expired  : {info.get('EXPIRED', '-')}\n"
+                    f"📱 Device   : {info.get('MAX_DEVICE', max_device)}\n"
+                    f"📊 Status   : {info.get('STATUS', 'ACTIVE')}\n\n"
+                    "🔐 CONFIG\n\n"
+                    "🔵 VMess WS TLS 443\n"
+                    f"{info.get('VMESS_WS_TLS', '-')}\n\n"
+                    "🌐 VMess WS 80\n"
+                    f"{info.get('VMESS_WS_80', '-')}\n\n"
+                    "🔵 VMess gRPC TLS 443\n"
+                    f"{info.get('VMESS_GRPC_TLS', '-')}\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "Nagara Tunnel"
+                )
+
+            elif protocol == "trojan":
+                message = (
+                    "╔══════════════════════════════╗\n"
+                    "║   ✅ USER BERHASIL DIBUAT   ║\n"
+                    "╚══════════════════════════════╝\n\n"
+                    f"👤 Username : {info.get('USERNAME', username)}\n"
+                    f"🔌 Protocol : TROJAN\n"
+                    f"📅 Expired  : {info.get('EXPIRED', '-')}\n"
+                    f"📱 Device   : {info.get('MAX_DEVICE', max_device)}\n"
+                    f"📊 Status   : {info.get('STATUS', 'ACTIVE')}\n\n"
+                    "🔐 CONFIG\n\n"
+                    "🟠 Trojan TLS 443\n"
+                    f"{info.get('TROJAN_TLS_443', '-')}\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "Nagara Tunnel"
+                )
+
+            else:
+                message = (
+                    "✅ USER BERHASIL DIBUAT\n\n"
+                    + link_result.stdout.strip()
+                )
+
+            send_message(chat_id, message)
 
             USER_STATES.pop(chat_id, None)
 
