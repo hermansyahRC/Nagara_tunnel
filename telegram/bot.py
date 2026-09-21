@@ -182,6 +182,70 @@ def get_vps_status():
         f"Users   : {users}"
     )
 
+def get_user_config(username):
+    user_data = get_user_data(username)
+
+    if not user_data:
+        return None
+
+    protocol = user_data[1].lower()
+
+    scripts = {
+        "vless": "/opt/nagara-tunnel/bin/vless-link-core.sh",
+        "vmess": "/opt/nagara-tunnel/bin/vmess-link-core.sh",
+        "trojan": "/opt/nagara-tunnel/bin/trojan-link-core.sh"
+    }
+
+    script = scripts.get(protocol)
+
+    if not script:
+        return None
+
+    try:
+        result = subprocess.run(
+            ["bash", script, username],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            return None
+
+        return result.stdout.strip()
+
+    except Exception:
+        return None
+
+
+
+def get_user_data(username):
+    if not os.path.exists(USERS_DB):
+        return None
+
+    try:
+        with open(USERS_DB, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+
+                if not line:
+                    continue
+
+                parts = line.split("|")
+
+                if len(parts) < 7:
+                    continue
+
+                if parts[0] == username:
+                    return parts
+
+    except Exception:
+        return None
+
+    return None
+
+
+
 def get_user_list():
     if not os.path.exists(USERS_DB):
         return "Belum ada database user."
@@ -223,6 +287,31 @@ def get_user_list():
 
     return "📋 DAFTAR USER\n\n" + "\n\n".join(rows)
 
+def user_action_menu(username):
+        return {
+        "inline_keyboard": [
+            [
+                {"text": "🔗 Lihat Config", "callback_data": f"user_config:{username}"}
+            ],
+            [
+                {"text": "♻️ Perpanjang", "callback_data": f"user_renew:{username}"}
+            ],
+            [
+                {"text": "❄️ Freeze", "callback_data": f"user_freeze:{username}"},
+                {"text": "▶️ Unfreeze", "callback_data": f"user_unfreeze:{username}"}
+            ],
+            [
+                {"text": "🚫 Ban", "callback_data": f"user_ban:{username}"},
+                {"text": "🗑️ Hapus", "callback_data": f"user_delete:{username}"}
+            ],
+            [
+                {"text": "⬅️ Daftar User", "callback_data": "user_list"}
+            ]
+        ]
+    }
+
+
+
 def user_manager_menu():
     return {
         "inline_keyboard": [
@@ -237,6 +326,47 @@ def user_manager_menu():
             ]
         ]
     }
+
+def get_user_list_menu():
+    keyboard = []
+
+    if os.path.exists(USERS_DB):
+        try:
+            with open(USERS_DB, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    parts = line.split("|")
+
+                    if len(parts) < 7:
+                        continue
+
+                    username = parts[0]
+
+                    keyboard.append([
+                        {
+                            "text": f"👤 {username}",
+                            "callback_data": f"user_detail:{username}"
+                        }
+                    ])
+
+        except Exception:
+            pass
+
+    keyboard.append([
+        {"text": "🔄 Refresh", "callback_data": "user_list"}
+    ])
+
+    keyboard.append([
+        {"text": "⬅️ User Manager", "callback_data": "user_manager"}
+    ])
+
+    return {"inline_keyboard": keyboard}
+
+
 
 def user_create_menu():
     return {
@@ -289,6 +419,99 @@ def handle_callback(callback):
         return
 
     answer_callback(callback_id)
+
+    if data.startswith("user_config:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+        config = get_user_config(username)
+
+        if not user_data or not config:
+            send_message(
+                chat_id,
+                "❌ Config user tidak dapat dibuat."
+            )
+            return
+
+        protocol = user_data[1].upper()
+        expired = user_data[4]
+        max_device = user_data[5]
+
+        lines = config.splitlines()
+
+        config_lines = []
+
+        for line in lines:
+            if line.startswith("VLESS_"):
+                config_lines.append(line.split("=", 1)[1])
+            elif line.startswith("VMESS_"):
+                config_lines.append(line.split("=", 1)[1])
+            elif line.startswith("TROJAN_"):
+                config_lines.append(line.split("=", 1)[1])
+
+        message = (
+            "🔐 CONFIG USER\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {protocol}\n"
+            f"📅 Expired  : {expired}\n"
+            f"📱 Device   : {max_device}\n\n"
+        )
+
+        for item in config_lines:
+            if item.startswith("vless://"):
+                if ":443?" in item:
+                    message += "🟢 VLESS TLS 443\n"
+                elif ":80?" in item:
+                    message += "🌐 VLESS HTTP 80\n"
+
+                message += item + "\n\n"
+
+            elif item.startswith("vmess://"):
+                message += "🔵 VMESS\n"
+                message += item + "\n\n"
+
+            elif item.startswith("trojan://"):
+                message += "🔴 TROJAN\n"
+                message += item + "\n\n"
+
+        message += "━━━━━━━━━━━━━━━━━━━━\nNagara Tunnel"
+
+        send_message(
+            chat_id,
+            message
+        )
+
+        return
+
+
+    if data.startswith("user_detail:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(
+                chat_id,
+                "❌ User tidak ditemukan."
+            )
+            return
+
+        protocol = user_data[1].upper()
+        expired = user_data[4]
+        max_device = user_data[5]
+        status = user_data[6].upper()
+
+        send_message(
+            chat_id,
+            "👤 USER: " + username + "\n\n"
+            "🔌 Protocol : " + protocol + "\n"
+            "📅 Expired  : " + expired + "\n"
+            "📱 Device   : " + max_device + "\n"
+            "📊 Status   : " + status + "\n\n"
+            "🛠️ Pilih tindakan:",
+            user_action_menu(username)
+        )
+        return
 
     if data == "user_create":
         send_message(
@@ -512,25 +735,12 @@ def handle_callback(callback):
             "👤 USER MANAGER\n\n"
             "Pilih tindakan:",
             user_manager_menu()
-        )
-
+	)
     elif data == "user_list":
         send_message(
             chat_id,
             get_user_list(),
-            {
-                "inline_keyboard": [
-                    [
-                        {"text": "🔄 Refresh", "callback_data": "user_list"}
-                    ],
-                    [
-                        {"text": "⬅️ User Manager", "callback_data": "user_manager"}
-                    ],
-                    [
-                        {"text": "⬅️ Menu Utama", "callback_data": "main_menu"}
-                    ]
-                ]
-            }
+            get_user_list_menu()
         )
 
     elif data == "vps_status":
