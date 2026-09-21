@@ -288,29 +288,74 @@ def get_user_list():
     return "📋 DAFTAR USER\n\n" + "\n\n".join(rows)
 
 def user_action_menu(username):
+    user_data = get_user_data(username)
+
+    if not user_data:
         return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "⬅️ Daftar User",
+                        "callback_data": "user_list"
+                    }
+                ]
+            ]
+        }
+
+    status = user_data[6]
+
+    if status == "BANNED":
+        status_buttons = [
+            {
+                "text": "▶️ Unban",
+                "callback_data": f"user_unban:{username}"
+            }
+        ]
+    else:
+        status_buttons = [
+            {
+                "text": "❄️ Freeze",
+                "callback_data": f"user_freeze:{username}"
+            },
+            {
+                "text": "▶️ Unfreeze",
+                "callback_data": f"user_unfreeze:{username}"
+            }
+        ]
+
+    return {
         "inline_keyboard": [
             [
-                {"text": "🔗 Lihat Config", "callback_data": f"user_config:{username}"}
+                {
+                    "text": "🔗 Lihat Config",
+                    "callback_data": f"user_config:{username}"
+                }
             ],
             [
-                {"text": "♻️ Perpanjang", "callback_data": f"user_renew:{username}"}
+                {
+                    "text": "♻️ Perpanjang",
+                    "callback_data": f"user_renew:{username}"
+                }
+            ],
+            status_buttons,
+            [
+                {
+                    "text": "🚫 Ban",
+                    "callback_data": f"user_ban:{username}"
+                },
+                {
+                    "text": "🗑️ Hapus",
+                    "callback_data": f"user_delete:{username}"
+                }
             ],
             [
-                {"text": "❄️ Freeze", "callback_data": f"user_freeze:{username}"},
-                {"text": "▶️ Unfreeze", "callback_data": f"user_unfreeze:{username}"}
-            ],
-            [
-                {"text": "🚫 Ban", "callback_data": f"user_ban:{username}"},
-                {"text": "🗑️ Hapus", "callback_data": f"user_delete:{username}"}
-            ],
-            [
-                {"text": "⬅️ Daftar User", "callback_data": "user_list"}
+                {
+                    "text": "⬅️ Daftar User",
+                    "callback_data": "user_list"
+                }
             ]
         ]
     }
-
-
 
 def user_manager_menu():
     return {
@@ -419,6 +464,301 @@ def handle_callback(callback):
         return
 
     answer_callback(callback_id)
+
+    if data.startswith("user_renew:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(
+                chat_id,
+                "❌ User tidak ditemukan."
+            )
+            return
+
+        USER_STATES[chat_id] = {
+            "step": "renew_days",
+            "username": username
+        }
+
+        send_message(
+            chat_id,
+            "♻️ PERPANJANG USER\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📅 Expired  : {user_data[4]}\n\n"
+            "Masukkan jumlah hari perpanjangan.\n"
+            "Contoh: 30"
+        )
+
+        return
+
+    if data.startswith("user_delete:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(
+                chat_id,
+                "❌ User tidak ditemukan."
+            )
+            return
+
+        USER_STATES[chat_id] = {
+            "step": "delete_confirm",
+            "username": username
+        }
+
+        send_message(
+            chat_id,
+            "⚠️ KONFIRMASI HAPUS USER\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📅 Expired  : {user_data[4]}\n"
+            f"📱 Device   : {user_data[5]}\n"
+            f"📊 Status   : {user_data[6]}\n\n"
+            "⚠️ User akan dihapus permanen dari database "
+            "dan dikeluarkan dari Xray.\n\n"
+            "Lanjutkan?",
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "🗑️ Ya, Hapus",
+                            "callback_data": "delete_confirm"
+                        },
+                        {
+                            "text": "❌ Batal",
+                            "callback_data": "delete_cancel"
+                        }
+                    ]
+                ]
+            }
+        )
+        return
+
+    elif data == "delete_confirm":
+        state = USER_STATES.get(chat_id)
+
+        if not state or state.get("step") != "delete_confirm":
+            send_message(
+                chat_id,
+                "❌ Sesi hapus sudah tidak tersedia."
+            )
+            return
+
+        username = state.get("username", "")
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "/opt/nagara-tunnel/bin/user-delete-core.sh",
+                    username
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90
+            )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL MENGHAPUS USER\n\n"
+                    f"{error}"
+                )
+
+                USER_STATES.pop(chat_id, None)
+                return
+
+            send_message(
+                chat_id,
+                "╔══════════════════════════════╗\n"
+                "║  🗑️ USER BERHASIL DIHAPUS   ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {username}\n\n"
+                "User sudah dihapus dari database "
+                "dan dikeluarkan dari Xray."
+            )
+
+            USER_STATES.pop(chat_id, None)
+            return
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+            USER_STATES.pop(chat_id, None)
+
+    elif data == "delete_cancel":
+        USER_STATES.pop(chat_id, None)
+
+        send_message(
+            chat_id,
+            "❌ Penghapusan dibatalkan.",
+            user_manager_menu()
+        )
+
+    if data.startswith("user_ban:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(chat_id, "❌ User tidak ditemukan.")
+            return
+
+        USER_STATES[chat_id] = {
+            "step": "ban_confirm",
+            "username": username
+        }
+
+        send_message(
+            chat_id,
+            "🚫 KONFIRMASI BAN\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📊 Status sekarang : {user_data[6]}\n\n"
+            "User akan diblokir dan dikeluarkan dari Xray.\n"
+            "Lanjutkan?",
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "🚫 Ya, Ban",
+                            "callback_data": "ban_confirm"
+                        },
+                        {
+                            "text": "❌ Batal",
+                            "callback_data": "ban_cancel"
+                        }
+                    ]
+                ]
+            }
+        )
+        return
+
+    if data.startswith("user_unban:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(chat_id, "❌ User tidak ditemukan.")
+            return
+
+        USER_STATES[chat_id] = {
+            "step": "unban_confirm",
+            "username": username
+        }
+
+        send_message(
+            chat_id,
+            "▶️ KONFIRMASI UNBAN\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📊 Status sekarang : {user_data[6]}\n\n"
+            "User akan diaktifkan kembali ke Xray.\n"
+            "Lanjutkan?",
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "▶️ Ya, Unban",
+                            "callback_data": "unban_confirm"
+                        },
+                        {
+                            "text": "❌ Batal",
+                            "callback_data": "unban_cancel"
+                        }
+                    ]
+                ]
+            }
+        )
+        return
+
+    if data.startswith("user_freeze:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(chat_id, "❌ User tidak ditemukan.")
+            return
+
+        USER_STATES[chat_id] = {
+            "step": "freeze_confirm",
+            "username": username
+        }
+
+        send_message(
+            chat_id,
+            "❄️ KONFIRMASI FREEZE\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📊 Status sekarang : {user_data[6]}\n\n"
+            "User akan dinonaktifkan dari Xray.\n"
+            "Lanjutkan?",
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "❄️ Ya, Freeze",
+                            "callback_data": "freeze_confirm"
+                        },
+                        {
+                            "text": "❌ Batal",
+                            "callback_data": "freeze_cancel"
+                        }
+                    ]
+                ]
+            }
+        )
+        return
+
+    if data.startswith("user_unfreeze:"):
+        username = data.split(":", 1)[1]
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            send_message(chat_id, "❌ User tidak ditemukan.")
+            return
+
+        USER_STATES[chat_id] = {
+            "step": "unfreeze_confirm",
+            "username": username
+        }
+
+        send_message(
+            chat_id,
+            "▶️ KONFIRMASI UNFREEZE\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📊 Status sekarang : {user_data[6]}\n\n"
+            "User akan diaktifkan kembali ke Xray.\n"
+            "Lanjutkan?",
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "▶️ Ya, Unfreeze",
+                            "callback_data": "unfreeze_confirm"
+                        },
+                        {
+                            "text": "❌ Batal",
+                            "callback_data": "unfreeze_cancel"
+                        }
+                    ]
+                ]
+            }
+        )
+        return
 
     if data.startswith("user_config:"):
         username = data.split(":", 1)[1]
@@ -552,6 +892,465 @@ def handle_callback(callback):
             "🟠 Trojan dipilih.\n\n"
             "Kirim username baru:"
         )
+    elif data == "ban_confirm":
+        state = USER_STATES.get(chat_id)
+
+        if not state or state.get("step") != "ban_confirm":
+            send_message(
+                chat_id,
+                "❌ Sesi ban sudah tidak tersedia."
+            )
+            return
+
+        username = state.get("username", "")
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f"""
+BASE="/opt/nagara-tunnel"
+USER_FILE="$BASE/users/users.db"
+SYNC_SCRIPT="$BASE/bin/sync-users.sh"
+BACKUP="$BASE/backups/users-db-ban-$(date +%Y%m%d-%H%M%S).db"
+
+mkdir -p "$BASE/backups"
+cp "$USER_FILE" "$BACKUP"
+
+awk -F'|' -v OFS='|' -v u="{username}" '
+$1 == u {{
+    $7="BANNED"
+}}
+{{
+    print
+}}
+' "$USER_FILE" > "$USER_FILE.tmp"
+
+mv "$USER_FILE.tmp" "$USER_FILE"
+chmod 600 "$USER_FILE"
+
+if "$SYNC_SCRIPT"; then
+    rm -f "$BACKUP"
+    echo "BAN_SUCCESS"
+else
+    cp "$BACKUP" "$USER_FILE"
+    chmod 600 "$USER_FILE"
+    rm -f "$BACKUP"
+    echo "BAN_FAILED"
+    exit 1
+fi
+"""
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90
+            )
+
+            if result.returncode != 0 or "BAN_SUCCESS" not in result.stdout:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL BAN USER\n\n"
+                    f"{error}"
+                )
+
+                USER_STATES.pop(chat_id, None)
+                return
+
+            send_message(
+                chat_id,
+                "╔══════════════════════════════╗\n"
+                "║   🚫 USER BERHASIL DI-BAN   ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {username}\n"
+                "📊 Status   : BANNED\n\n"
+                "User sudah diblokir dari Xray."
+            )
+
+            USER_STATES.pop(chat_id, None)
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+            USER_STATES.pop(chat_id, None)
+
+    elif data == "ban_cancel":
+        USER_STATES.pop(chat_id, None)
+
+        send_message(
+            chat_id,
+            "❌ Ban dibatalkan.",
+            user_manager_menu()
+        )
+
+    elif data == "unban_confirm":
+        state = USER_STATES.get(chat_id)
+
+        if not state or state.get("step") != "unban_confirm":
+            send_message(
+                chat_id,
+                "❌ Sesi unban sudah tidak tersedia."
+            )
+            return
+
+        username = state.get("username", "")
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f"""
+BASE="/opt/nagara-tunnel"
+USER_FILE="$BASE/users/users.db"
+SYNC_SCRIPT="$BASE/bin/sync-users.sh"
+BACKUP="$BASE/backups/users-db-unban-$(date +%Y%m%d-%H%M%S).db"
+
+mkdir -p "$BASE/backups"
+cp "$USER_FILE" "$BACKUP"
+
+awk -F'|' -v OFS='|' -v u="{username}" '
+$1 == u {{
+    $7="ACTIVE"
+}}
+{{
+    print
+}}
+' "$USER_FILE" > "$USER_FILE.tmp"
+
+mv "$USER_FILE.tmp" "$USER_FILE"
+chmod 600 "$USER_FILE"
+
+if "$SYNC_SCRIPT"; then
+    rm -f "$BACKUP"
+    echo "UNBAN_SUCCESS"
+else
+    cp "$BACKUP" "$USER_FILE"
+    chmod 600 "$USER_FILE"
+    rm -f "$BACKUP"
+    echo "UNBAN_FAILED"
+    exit 1
+fi
+"""
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90
+            )
+
+            if result.returncode != 0 or "UNBAN_SUCCESS" not in result.stdout:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL UNBAN USER\n\n"
+                    f"{error}"
+                )
+
+                USER_STATES.pop(chat_id, None)
+                return
+
+            send_message(
+                chat_id,
+                "╔══════════════════════════════╗\n"
+                "║  ▶️ USER BERHASIL DI-UNBAN  ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {username}\n"
+                "📊 Status   : ACTIVE\n\n"
+                "User sudah diaktifkan kembali ke Xray."
+            )
+
+            USER_STATES.pop(chat_id, None)
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+            USER_STATES.pop(chat_id, None)
+
+    elif data == "unban_cancel":
+        USER_STATES.pop(chat_id, None)
+
+        send_message(
+            chat_id,
+            "❌ Unban dibatalkan.",
+            user_manager_menu()
+        )
+
+    elif data == "freeze_confirm":
+        state = USER_STATES.get(chat_id)
+
+        if not state or state.get("step") != "freeze_confirm":
+            send_message(
+                chat_id,
+                "❌ Sesi freeze sudah tidak tersedia."
+            )
+            return
+
+        username = state.get("username", "")
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f"""
+BASE="/opt/nagara-tunnel"
+USER_FILE="$BASE/users/users.db"
+SYNC_SCRIPT="$BASE/bin/sync-users.sh"
+BACKUP="$BASE/backups/users-db-freeze-$(date +%Y%m%d-%H%M%S).db"
+
+mkdir -p "$BASE/backups"
+cp "$USER_FILE" "$BACKUP"
+
+awk -F'|' -v OFS='|' -v u="{username}" '
+$1 == u {{
+    $7="FROZEN"
+}}
+{{
+    print
+}}
+' "$USER_FILE" > "$USER_FILE.tmp"
+
+mv "$USER_FILE.tmp" "$USER_FILE"
+chmod 600 "$USER_FILE"
+
+if "$SYNC_SCRIPT"; then
+    rm -f "$BACKUP"
+    echo "FREEZE_SUCCESS"
+else
+    cp "$BACKUP" "$USER_FILE"
+    chmod 600 "$USER_FILE"
+    rm -f "$BACKUP"
+    echo "FREEZE_FAILED"
+    exit 1
+fi
+"""
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90
+            )
+
+            if result.returncode != 0 or "FREEZE_SUCCESS" not in result.stdout:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL FREEZE USER\n\n"
+                    f"{error}"
+                )
+
+                USER_STATES.pop(chat_id, None)
+                return
+
+            send_message(
+                chat_id,
+                "╔══════════════════════════════╗\n"
+                "║   ❄️ USER BERHASIL FREEZE   ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {username}\n"
+                "📊 Status   : FROZEN\n\n"
+                "User sudah dinonaktifkan dari Xray."
+            )
+
+            USER_STATES.pop(chat_id, None)
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+            USER_STATES.pop(chat_id, None)
+
+    elif data == "freeze_cancel":
+        USER_STATES.pop(chat_id, None)
+
+        send_message(
+            chat_id,
+            "❌ Freeze dibatalkan.",
+            user_manager_menu()
+        )
+
+    elif data == "unfreeze_confirm":
+        state = USER_STATES.get(chat_id)
+
+        if not state or state.get("step") != "unfreeze_confirm":
+            send_message(
+                chat_id,
+                "❌ Sesi unfreeze sudah tidak tersedia."
+            )
+            return
+
+        username = state.get("username", "")
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f"""
+BASE="/opt/nagara-tunnel"
+USER_FILE="$BASE/users/users.db"
+SYNC_SCRIPT="$BASE/bin/sync-users.sh"
+BACKUP="$BASE/backups/users-db-unfreeze-$(date +%Y%m%d-%H%M%S).db"
+
+mkdir -p "$BASE/backups"
+cp "$USER_FILE" "$BACKUP"
+
+awk -F'|' -v OFS='|' -v u="{username}" '
+$1 == u {{
+    $7="ACTIVE"
+}}
+{{
+    print
+}}
+' "$USER_FILE" > "$USER_FILE.tmp"
+
+mv "$USER_FILE.tmp" "$USER_FILE"
+chmod 600 "$USER_FILE"
+
+if "$SYNC_SCRIPT"; then
+    rm -f "$BACKUP"
+    echo "UNFREEZE_SUCCESS"
+else
+    cp "$BACKUP" "$USER_FILE"
+    chmod 600 "$USER_FILE"
+    rm -f "$BACKUP"
+    echo "UNFREEZE_FAILED"
+    exit 1
+fi
+"""
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90
+            )
+
+            if result.returncode != 0 or "UNFREEZE_SUCCESS" not in result.stdout:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL UNFREEZE USER\n\n"
+                    f"{error}"
+                )
+
+                USER_STATES.pop(chat_id, None)
+                return
+
+            send_message(
+                chat_id,
+                "╔══════════════════════════════╗\n"
+                "║  ▶️ USER BERHASIL UNFREEZE  ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {username}\n"
+                "📊 Status   : ACTIVE\n\n"
+                "User sudah diaktifkan kembali ke Xray."
+            )
+
+            USER_STATES.pop(chat_id, None)
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+            USER_STATES.pop(chat_id, None)
+
+    elif data == "unfreeze_cancel":
+        USER_STATES.pop(chat_id, None)
+
+        send_message(
+            chat_id,
+            "❌ Unfreeze dibatalkan.",
+            user_manager_menu()
+        )
+
+    elif data == "renew_confirm":
+        state = USER_STATES.get(chat_id)
+
+        if not state or state.get("step") != "renew_confirm":
+            send_message(
+                chat_id,
+                "❌ Sesi perpanjangan sudah tidak tersedia."
+            )
+            return
+
+        username = state.get("username", "")
+        days = state.get("days", 0)
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "/opt/nagara-tunnel/bin/user-renew-core.sh",
+                    username,
+                    str(days)
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90
+            )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL MEMPERPANJANG USER\n\n"
+                    f"{error}"
+                )
+
+                USER_STATES.pop(chat_id, None)
+                return
+
+            info = {}
+
+            for line in result.stdout.splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    info[key.strip()] = value.strip()
+
+            send_message(
+                chat_id,
+                "╔══════════════════════════════╗\n"
+                "║  ✅ USER BERHASIL DIPERPANJANG ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {info.get('USERNAME', username)}\n"
+                f"🔌 Protocol : {info.get('PROTOCOL', '-').upper()}\n"
+                f"📅 Sebelumnya : {info.get('OLD_EXPIRED', '-')}\n"
+                f"➕ Tambah    : {info.get('DAYS', days)} hari\n"
+                f"📅 Expired   : {info.get('EXPIRED', '-')}\n"
+                f"📱 Device    : {info.get('MAX_DEVICE', '-')}\n"
+                f"📊 Status    : {info.get('STATUS', 'ACTIVE')}\n\n"
+                "Xray berhasil disinkronkan."
+            )
+
+            USER_STATES.pop(chat_id, None)
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+            USER_STATES.pop(chat_id, None)
+
+    elif data == "renew_cancel":
+        USER_STATES.pop(chat_id, None)
+
+        send_message(
+            chat_id,
+            "❌ Perpanjangan dibatalkan.",
+            user_manager_menu()
+        )
+    
+
     elif data == "create_confirm":
         state = USER_STATES.get(chat_id)
 
@@ -798,6 +1597,57 @@ def handle_message(message):
     text = message.get("text", "").strip()
 
     state = USER_STATES.get(chat_id)
+
+    if state and state.get("step") == "renew_days":
+        if not text.isdigit() or int(text) < 1:
+            send_message(
+                chat_id,
+                "❌ Jumlah hari tidak valid.\n\n"
+                "Masukkan angka minimal 1 hari.\n"
+                "Contoh: 30"
+            )
+            return
+
+        days = int(text)
+        username = state.get("username", "")
+
+        user_data = get_user_data(username)
+
+        if not user_data:
+            USER_STATES.pop(chat_id, None)
+            send_message(
+                chat_id,
+                "❌ User tidak ditemukan."
+            )
+            return
+
+        USER_STATES[chat_id]["days"] = days
+        USER_STATES[chat_id]["step"] = "renew_confirm"
+
+        send_message(
+            chat_id,
+            "📋 KONFIRMASI PERPANJANGAN\n\n"
+            f"👤 Username : {username}\n"
+            f"🔌 Protocol : {user_data[1].upper()}\n"
+            f"📅 Expired sekarang : {user_data[4]}\n"
+            f"➕ Tambah masa aktif : {days} hari\n\n"
+            "Lanjutkan perpanjangan?",
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "✅ Ya, Perpanjang",
+                            "callback_data": "renew_confirm"
+                        },
+                        {
+                            "text": "❌ Batal",
+                            "callback_data": "renew_cancel"
+                        }
+                    ]
+                ]
+            }
+        )
+        return
 
     if state and state.get("step") == "username":
         username = text
