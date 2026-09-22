@@ -581,7 +581,7 @@ echo "       CONFIGURING XRAY + NGINX + SSL"
 echo "=============================================="
 echo
 
-DOMAIN="$DOMAIN" bash "$APP_DIR/bin/setup-stack.sh"
+RECOVERY_MODE="$RECOVERY_MODE" DOMAIN="$DOMAIN" bash "$APP_DIR/bin/setup-stack.sh"
 
 if [ -f /etc/profile.d/nagara-tunnel.sh ]; then
     rm -f /etc/profile.d/nagara-tunnel.sh
