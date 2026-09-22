@@ -339,6 +339,12 @@ def user_action_menu(username):
 ],
 [
     {
+        "text": "📈 Traffic History",
+        "callback_data": f"user_traffic_history:{username}"
+    }
+],
+[
+    {
         "text": "♻️ Perpanjang",
                     "callback_data": f"user_renew:{username}"
                 }
@@ -896,6 +902,72 @@ def handle_callback(callback):
                 f"❌ Terjadi error:\n{e}"
             )
 
+        return
+
+    if data.startswith("user_traffic_history:"):
+        username = data.split(":", 1)[1]
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "/opt/nagara-tunnel/bin/user-traffic-history-core.sh",
+                    username
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip()
+                send_message(
+                    chat_id,
+                    "❌ GAGAL MENGAMBIL TRAFFIC HISTORY\n\n"
+                    f"{error}"
+                )
+                return
+
+            history = {}
+
+            for line in result.stdout.splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    history[key] = value
+
+            if not history.get("USERNAME"):
+                send_message(
+                    chat_id,
+                    "❌ Data traffic history tidak ditemukan."
+                )
+                return
+
+            message = (
+                "╔══════════════════════════════╗\n"
+                "║    📈 TRAFFIC HISTORY       ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {history.get('USERNAME', username)}\n\n"
+                "📅 HARI INI\n"
+                f"📥 Download : {history.get('TODAY_DOWNLOAD', '0 B')}\n"
+                f"📤 Upload   : {history.get('TODAY_UPLOAD', '0 B')}\n"
+                f"📊 Total    : {history.get('TODAY_TOTAL', '0 B')}\n\n"
+                "📆 7 HARI TERAKHIR\n"
+                f"📥 Download : {history.get('WEEK_DOWNLOAD', '0 B')}\n"
+                f"📤 Upload   : {history.get('WEEK_UPLOAD', '0 B')}\n"
+                f"📊 Total    : {history.get('WEEK_TOTAL', '0 B')}\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "Nagara Tunnel"
+            )
+
+            send_message(
+                chat_id,
+                message
+            )
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
         return
 
     if data.startswith("user_detail:"):
