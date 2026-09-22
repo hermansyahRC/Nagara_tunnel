@@ -325,15 +325,21 @@ def user_action_menu(username):
 
     return {
         "inline_keyboard": [
-            [
-                {
-                    "text": "🔗 Lihat Config",
-                    "callback_data": f"user_config:{username}"
-                }
-            ],
-            [
-                {
-                    "text": "♻️ Perpanjang",
+[
+    {
+        "text": "🔗 Lihat Config",
+        "callback_data": f"user_config:{username}"
+    }
+],
+[
+    {
+        "text": "📊 Traffic",
+        "callback_data": f"user_traffic:{username}"
+    }
+],
+[
+    {
+        "text": "♻️ Perpanjang",
                     "callback_data": f"user_renew:{username}"
                 }
             ],
@@ -823,6 +829,74 @@ def handle_callback(callback):
 
         return
 
+
+    if data.startswith("user_traffic:"):
+        username = data.split(":", 1)[1]
+
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "/opt/nagara-tunnel/bin/user-traffic-core.sh",
+                    username
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip()
+
+                send_message(
+                    chat_id,
+                    "❌ GAGAL MENGAMBIL TRAFFIC\n\n"
+                    f"{error}"
+                )
+                return
+
+            traffic = {}
+
+            for line in result.stdout.splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    traffic[key] = value
+
+            if not traffic.get("USERNAME"):
+                send_message(
+                    chat_id,
+                    "❌ Data traffic tidak ditemukan."
+                )
+                return
+
+            message = (
+                "╔══════════════════════════════╗\n"
+                "║      📊 USER TRAFFIC        ║\n"
+                "╚══════════════════════════════╝\n\n"
+                f"👤 Username : {traffic.get('USERNAME', username)}\n"
+                f"🔌 Protocol : {traffic.get('PROTOCOL', '-').upper()}\n"
+                f"📅 Expired  : {traffic.get('EXPIRED', '-')}\n"
+                f"📱 Device   : {traffic.get('MAX_DEVICE', '-')}\n"
+                f"📊 Status   : {traffic.get('STATUS', '-')}\n\n"
+                f"📥 Download : {traffic.get('DOWNLOAD', '0 B')}\n"
+                f"📤 Upload   : {traffic.get('UPLOAD', '0 B')}\n"
+                f"📊 Total    : {traffic.get('TOTAL', '0 B')}\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "Nagara Tunnel"
+            )
+
+            send_message(
+                chat_id,
+                message
+            )
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+
+        return
 
     if data.startswith("user_detail:"):
         username = data.split(":", 1)[1]
