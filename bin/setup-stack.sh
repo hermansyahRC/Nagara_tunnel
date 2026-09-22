@@ -119,27 +119,36 @@ echo "[OK] Nginx HTTP aktif."
 echo
 echo "[3/6] Meminta SSL Let's Encrypt..."
 
-if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+SSL_ACTIVE=false
 
-    certbot certonly \
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "[INFO] SSL sudah tersedia."
+    SSL_ACTIVE=true
+else
+    echo "[INFO] Mencoba meminta sertifikat SSL..."
+
+    if certbot certonly \
         --webroot \
         -w /var/www/html \
         -d "$DOMAIN" \
         --non-interactive \
         --agree-tos \
-        --register-unsafely-without-email
+        --register-unsafely-without-email; then
 
+        if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+            echo "[OK] SSL berhasil diterbitkan."
+            SSL_ACTIVE=true
+        fi
+    fi
+fi
+
+if [ "$SSL_ACTIVE" = true ]; then
+    echo "[OK] SSL aktif untuk $DOMAIN."
 else
-    echo "[INFO] SSL sudah tersedia."
+    echo "[WARN] SSL belum aktif."
+    echo "[WARN] Kemungkinan DNS domain belum mengarah ke VPS."
+    echo "[INFO] Instalasi akan dilanjutkan tanpa HTTPS."
 fi
-
-if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
-    echo
-    echo "ERROR: Sertifikat SSL tidak ditemukan."
-    exit 1
-fi
-
-echo "[OK] SSL tersedia."
 
 # ==================================================
 # NGINX HTTPS
@@ -147,6 +156,8 @@ echo "[OK] SSL tersedia."
 
 echo
 echo "[4/6] Mengaktifkan HTTPS..."
+
+if [ "$SSL_ACTIVE" = true ]; then
 
 cat > "$NGINX_SITE" <<EOF
 server {
@@ -211,6 +222,14 @@ nginx -t
 systemctl reload nginx
 
 echo "[OK] HTTPS aktif."
+
+else
+
+echo "[WARN] SSL belum aktif."
+echo "[WARN] HTTPS dilewati."
+echo "[OK] Nginx HTTP tetap aktif."
+
+fi
 
 # ==================================================
 # XRAY SERVICE
