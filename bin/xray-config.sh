@@ -44,6 +44,13 @@ fi
 # CREATE BASELINE CONFIG
 # --------------------------------------------------
 
+mkdir -p /opt/nagara-tunnel/logs
+touch /opt/nagara-tunnel/logs/xray-access.log
+chown nobody:nogroup /opt/nagara-tunnel/logs
+chown nobody:nogroup /opt/nagara-tunnel/logs/xray-access.log
+chmod 750 /opt/nagara-tunnel/logs
+chmod 640 /opt/nagara-tunnel/logs/xray-access.log
+
 cat > "$XRAY_CONFIG" <<'EOF'
 {
   "log": {
