@@ -1704,6 +1704,93 @@ fi
             }
         )
 
+    elif data == "traffic":
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "/opt/nagara-tunnel/bin/traffic-summary-core.sh"
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip()
+                send_message(
+                    chat_id,
+                    "❌ GAGAL MENGAMBIL TRAFFIC\n\n"
+                    f"{error}"
+                )
+                return
+
+            users = []
+            summary = {}
+
+            for line in result.stdout.splitlines():
+                if line.startswith("USER="):
+                    parts = {}
+                    for item in line.split("|"):
+                        key, value = item.split("=", 1)
+                        parts[key] = value
+                    users.append(parts)
+                elif "=" in line:
+                    key, value = line.split("=", 1)
+                    summary[key] = value
+
+            message = (
+                "╔══════════════════════════════╗\n"
+                "║      📊 TRAFFIC SUMMARY     ║\n"
+                "╚══════════════════════════════╝\n\n"
+            )
+
+            for user in users:
+                message += (
+                    f"👤 {user.get('USER', '-')}\n"
+                    f"📥 {user.get('DOWNLOAD', '0 B')}\n"
+                    f"📤 {user.get('UPLOAD', '0 B')}\n"
+                    f"📊 {user.get('TOTAL', '0 B')}\n\n"
+                )
+
+            message += (
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"👥 Total User : {summary.get('SUMMARY_USERS', '0')}\n"
+                f"📥 Download   : {summary.get('SUMMARY_DOWNLOAD', '0 B')}\n"
+                f"📤 Upload     : {summary.get('SUMMARY_UPLOAD', '0 B')}\n"
+                f"📊 Total      : {summary.get('SUMMARY_TOTAL', '0 B')}\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "Nagara Tunnel"
+            )
+
+            send_message(
+                chat_id,
+                message,
+                {
+                    "inline_keyboard": [
+                        [
+                            {
+                                "text": "🔄 Refresh",
+                                "callback_data": "traffic"
+                            }
+                        ],
+                        [
+                            {
+                                "text": "⬅️ Menu Utama",
+                                "callback_data": "main_menu"
+                            }
+                        ]
+                    ]
+                }
+            )
+
+        except Exception as e:
+            send_message(
+                chat_id,
+                f"❌ Terjadi error:\n{e}"
+            )
+        return
+
     elif data == "main_menu":
         send_message(
             chat_id,
