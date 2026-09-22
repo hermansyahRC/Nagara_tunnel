@@ -495,6 +495,21 @@ echo
 
 DOMAIN="$DOMAIN" bash "$APP_DIR/bin/setup-stack.sh"
 
+if [ -f /etc/profile.d/nagara-tunnel.sh ]; then
+    rm -f /etc/profile.d/nagara-tunnel.sh
+fi
+
+cat > /etc/profile.d/nagara-tunnel.sh <<'EOF'
+# Nagara Tunnel Auto Menu
+if [ -n "$SSH_CONNECTION" ] && [[ "$-" == *i* ]] && [ "$(id -u)" -eq 0 ]; then
+    if [ -x /opt/nagara-tunnel/menu.sh ]; then
+        /opt/nagara-tunnel/menu.sh
+    fi
+fi
+EOF
+
+chmod 644 /etc/profile.d/nagara-tunnel.sh
+
 echo
 echo "=============================================="
 echo "       INSTALLER FOUNDATION SELESAI"
