@@ -5,6 +5,7 @@ APP_DIR="/opt/nagara-tunnel"
 CONFIG_DIR="$APP_DIR/config"
 BACKUP_DIR="$APP_DIR/backups"
 DOMAIN="${DOMAIN:-}"
+RECOVERY_MODE="${RECOVERY_MODE:-0}"
 
 XRAY_CONFIG="/usr/local/etc/xray/config.json"
 NGINX_SITE="/etc/nginx/sites-available/nagara-tunnel"
@@ -41,7 +42,7 @@ if [ ! -x "$APP_DIR/bin/xray-config.sh" ]; then
     exit 1
 fi
 
-bash "$APP_DIR/bin/xray-config.sh"
+RECOVERY_MODE="$RECOVERY_MODE" bash "$APP_DIR/bin/xray-config.sh"
 
 if ! xray run -test -config "$XRAY_CONFIG" >/dev/null 2>&1; then
     echo "ERROR: Konfigurasi Xray tidak valid."

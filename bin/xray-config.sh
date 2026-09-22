@@ -4,6 +4,7 @@ set -euo pipefail
 
 XRAY_CONFIG="/usr/local/etc/xray/config.json"
 BACKUP_DIR="/opt/nagara-tunnel/backups"
+RECOVERY_MODE="${RECOVERY_MODE:-0}"
 
 mkdir -p "$BACKUP_DIR"
 
@@ -43,6 +44,13 @@ fi
 # --------------------------------------------------
 # CREATE BASELINE CONFIG
 # --------------------------------------------------
+
+if [ "$RECOVERY_MODE" = "1" ] && [ -f "$XRAY_CONFIG" ]; then
+    echo "[INFO] Mode Repair aktif."
+    echo "[INFO] Konfigurasi Xray lama dipertahankan."
+    echo "[OK] Tidak membuat baseline Xray baru."
+    exit 0
+fi
 
 mkdir -p /opt/nagara-tunnel/logs
 touch /opt/nagara-tunnel/logs/xray-access.log
