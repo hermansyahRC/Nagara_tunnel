@@ -106,27 +106,96 @@ echo "Disk         : $DISK_INFO"
 echo "----------------------------------------------"
 
 # ==================================================
-# EXISTING INSTALLATION CHECK
+# EXISTING INSTALLATION CHECK / RECOVERY
 # ==================================================
 
 if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/config/system.conf" ]; then
     echo
     echo "=============================================="
-    echo "   INSTALASI NAGARA TERDETEKSI"
+    echo "       INSTALASI NAGARA TERDETEKSI"
     echo "=============================================="
     echo
     echo "Lokasi : $APP_DIR"
     echo
-    echo "Installer tidak akan menimpa instalasi yang ada."
+    echo "Pilih tindakan:"
     echo
-    echo "Untuk upgrade/migration gunakan mekanisme"
-    echo "upgrade atau migration Nagara Tunnel."
+    echo "1. Lanjutkan / Repair"
+    echo "2. Clear & Install Ulang"
+    echo "3. Keluar"
     echo
-    exit 0
+
+    while true; do
+        read -rp "Pilihan [1-3]: " RECOVERY_CHOICE
+
+        case "$RECOVERY_CHOICE" in
+            1)
+                echo
+                echo "[INFO] Melanjutkan / repair instalasi..."
+                RECOVERY_MODE=1
+                break
+                ;;
+
+            2)
+                echo
+                echo "=============================================="
+                echo "        CLEAR & INSTALL ULANG"
+                echo "=============================================="
+                echo
+                echo "[WARN] Instalasi Nagara lama akan dibersihkan."
+                echo "[WARN] Backup akan dibuat terlebih dahulu."
+                echo
+
+                read -rp "Ketik CLEAR untuk melanjutkan: " CLEAR_CONFIRM
+
+                if [ "$CLEAR_CONFIRM" != "CLEAR" ]; then
+                    echo
+                    echo "[INFO] Clear dibatalkan."
+                    exit 0
+                fi
+
+                BACKUP_DIR="/opt/nagara-tunnel-backup-$(date +%Y%m%d-%H%M%S)"
+
+                echo
+                echo "[INFO] Membuat backup: $BACKUP_DIR"
+
+                mkdir -p "$BACKUP_DIR"
+
+                cp -a "$APP_DIR" "$BACKUP_DIR/" 2>/dev/null || true
+
+                if [ -f /etc/profile.d/nagara-tunnel.sh ]; then
+                    cp -a /etc/profile.d/nagara-tunnel.sh "$BACKUP_DIR/" 2>/dev/null || true
+                    rm -f /etc/profile.d/nagara-tunnel.sh
+                fi
+
+                rm -rf "$APP_DIR"
+
+                echo "[OK] Instalasi Nagara lama dibersihkan."
+                echo "[OK] Backup tersedia di:"
+                echo "     $BACKUP_DIR"
+                echo
+                break
+                ;;
+
+            3)
+                echo
+                echo "[INFO] Installer dibatalkan."
+                exit 0
+                ;;
+
+            *)
+                echo "[WARN] Pilihan tidak valid. Gunakan 1, 2, atau 3."
+                ;;
+        esac
+    done
 fi
 
-echo
-echo "[OK] Tidak ada instalasi Nagara sebelumnya."
+if [ "${RECOVERY_MODE:-0}" = "1" ]; then
+    echo
+    echo "[OK] Instalasi Nagara lama akan digunakan untuk Repair."
+else
+    echo
+    echo "[OK] Tidak ada instalasi Nagara sebelumnya."
+fi
 
 # ==================================================
 # INTERNET CHECK
@@ -153,7 +222,10 @@ configure_swap() {
     echo
 
     CURRENT_SWAP_MB="$(awk '/SwapTotal:/ {print int($2/1024)}' /proc/meminfo)"
-
+if [ "${RECOVERY_MODE:-0}" = "1" ]; then
+    echo "[INFO] Mode Repair: konfigurasi Swap dilewati."
+    return 0
+fi
     if [ "$CURRENT_SWAP_MB" -gt 0 ]; then
         echo "[OK] Swap sudah tersedia: ${CURRENT_SWAP_MB} MB"
         return 0
@@ -444,32 +516,48 @@ echo "Masukkan domain yang akan digunakan Nagara Tunnel."
 echo "Contoh: vpn.domainkamu.com"
 echo
 
-while true; do
-    read -rp "Domain: " DOMAIN
+if [ "${RECOVERY_MODE:-0}" = "1" ] && [ -f "$APP_DIR/config/system.conf" ]; then
+    echo
+    echo "[INFO] Mode Repair aktif."
+    echo "[INFO] Membaca konfigurasi domain lama..."
 
-    DOMAIN="${DOMAIN#http://}"
-    DOMAIN="${DOMAIN#https://}"
-    DOMAIN="${DOMAIN%/}"
+    source "$APP_DIR/config/system.conf"
 
-    if [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
-        break
+    if [ -z "${DOMAIN:-}" ]; then
+        echo "ERROR: Domain lama tidak ditemukan."
+        exit 1
     fi
 
-    echo
-    echo "ERROR: Format domain tidak valid."
-    echo "Contoh: vpn.domainkamu.com"
-    echo
-done
+    echo "[OK] Domain lama : $DOMAIN"
 
-echo
-echo "[OK] Domain : $DOMAIN"
+else
+    while true; do
+        read -rp "Domain: " DOMAIN
 
-cat > "$APP_DIR/config/system.conf" <<EOF
+        DOMAIN="${DOMAIN#http://}"
+        DOMAIN="${DOMAIN#https://}"
+        DOMAIN="${DOMAIN%/}"
+
+        if [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            break
+        fi
+
+        echo
+        echo "ERROR: Format domain tidak valid."
+        echo "Contoh: vpn.domainkamu.com"
+        echo
+    done
+
+    echo
+    echo "[OK] Domain : $DOMAIN"
+
+    cat > "$APP_DIR/config/system.conf" <<EOF
 APP_NAME="$APP_NAME"
 APP_DIR="$APP_DIR"
 INSTALL_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
 DOMAIN="$DOMAIN"
 EOF
+fi
 
 chmod 755 "$APP_DIR"
 chmod 700 "$APP_DIR/config"
