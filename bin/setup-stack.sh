@@ -286,8 +286,15 @@ echo "=============================================="
 echo
 echo "Domain : $DOMAIN"
 echo
-echo "VLESS WS TLS : https://$DOMAIN/nagara-ws"
-echo "VMess WS TLS : https://$DOMAIN/vmess-ws"
-echo "VMess gRPC   : $DOMAIN:443"
+if [ "$SSL_ACTIVE" = true ]; then
+    echo "VLESS WS TLS : https://$DOMAIN/nagara-ws"
+    echo "VMess WS TLS : https://$DOMAIN/vmess-ws"
+    echo "VMess gRPC   : $DOMAIN:443"
+else
+    echo "VLESS WS     : http://$DOMAIN/nagara-ws"
+    echo "VMess WS     : http://$DOMAIN/vmess-ws"
+    echo "VMess gRPC   : belum aktif (menunggu SSL)"
+fi
+
 echo "Trojan       : tahap berikutnya"
 echo
