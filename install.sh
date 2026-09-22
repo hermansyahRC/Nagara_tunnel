@@ -143,6 +143,63 @@ else
 fi
 
 # ==================================================
+# SWAP CONFIGURATION
+# ==================================================
+configure_swap() {
+    echo
+    echo "=============================================="
+    echo "             SWAP CONFIGURATION"
+    echo "=============================================="
+    echo
+
+    CURRENT_SWAP_MB="$(awk '/SwapTotal:/ {print int($2/1024)}' /proc/meminfo)"
+
+    if [ "$CURRENT_SWAP_MB" -gt 0 ]; then
+        echo "[OK] Swap sudah tersedia: ${CURRENT_SWAP_MB} MB"
+        return 0
+    fi
+
+    echo "RAM terdeteksi : ${RAM_MB} MB"
+    echo "Swap saat ini  : 0 MB"
+    echo
+    read -rp "Buat Swap 1 GB? [Y/n]: " SWAP_CHOICE
+    SWAP_CHOICE="${SWAP_CHOICE:-Y}"
+
+    case "$SWAP_CHOICE" in
+        Y|y)
+            echo
+            echo "[INFO] Membuat Swap 1 GB..."
+
+            if ! fallocate -l 1G /swapfile 2>/dev/null; then
+                dd if=/dev/zero of=/swapfile bs=1M count=1024 status=progress
+            fi
+
+            chmod 600 /swapfile
+            mkswap /swapfile >/dev/null
+            swapon /swapfile
+
+            if ! grep -q '^/swapfile ' /etc/fstab; then
+                echo '/swapfile none swap sw 0 0' >> /etc/fstab
+            fi
+
+            echo
+            echo "[OK] Swap 1 GB berhasil diaktifkan."
+            swapon --show
+            ;;
+
+        N|n)
+            echo
+            echo "[INFO] Swap tidak dibuat."
+            ;;
+
+        *)
+            echo
+            echo "[INFO] Pilihan tidak dikenali. Swap tidak dibuat."
+            ;;
+    esac
+}
+
+# ==================================================
 # APT UPDATE
 # ==================================================
 
@@ -150,6 +207,8 @@ echo
 echo "[2/5] Update repository paket..."
 
 export DEBIAN_FRONTEND=noninteractive
+
+configure_swap
 
 apt-get update
 
