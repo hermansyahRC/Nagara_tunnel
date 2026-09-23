@@ -492,9 +492,9 @@ JSON
 JSON
 )"
 
-    link_ws="$(printf '%s' "$json_ws" | base64 -w 0)"
-    link_http="$(printf '%s' "$json_http" | base64 -w 0)"
-    link_grpc="$(printf '%s' "$json_grpc" | base64 -w 0)"
+    link_ws="vmess://$(printf '%s' "$json_ws" | base64 -w 0)"
+    link_http="vmess://$(printf '%s' "$json_http" | base64 -w 0)"
+    link_grpc="vmess://$(printf '%s' "$json_grpc" | base64 -w 0)"
 
     echo
     echo "==================== VMESS LINKS ===================="

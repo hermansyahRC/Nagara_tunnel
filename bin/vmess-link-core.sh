@@ -58,7 +58,7 @@ JSON_WS=$(cat <<EOF
 EOF
 )
 
-LINK_WS=$(printf '%s' "$JSON_WS" | base64 -w 0)
+LINK_WS="vmess://$(printf '%s' "$JSON_WS" | base64 -w 0)"
 
 JSON_HTTP=$(cat <<EOF
 {
@@ -78,7 +78,7 @@ JSON_HTTP=$(cat <<EOF
 EOF
 )
 
-LINK_HTTP=$(printf '%s' "$JSON_HTTP" | base64 -w 0)
+LINK_HTTP="vmess://$(printf '%s' "$JSON_HTTP" | base64 -w 0)"
 
 JSON_GRPC=$(cat <<EOF
 {
@@ -99,7 +99,7 @@ JSON_GRPC=$(cat <<EOF
 EOF
 )
 
-LINK_GRPC=$(printf '%s' "$JSON_GRPC" | base64 -w 0)
+LINK_GRPC="vmess://$(printf '%s' "$JSON_GRPC" | base64 -w 0)"
 
 echo "USERNAME=$USERNAME"
 echo "PROTOCOL=vmess"
