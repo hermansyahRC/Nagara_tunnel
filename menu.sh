@@ -346,13 +346,50 @@ while true; do
                     ;;
 
                 8)
-                    systemctl restart xray
-                    systemctl restart nginx
-                    systemctl restart cron
+                    clear
+
+                    echo "================================================"
+                    echo "           REFRESH / RESTART SEMUA"
+                    echo "================================================"
                     echo
-                    echo "Xray  : $(systemctl is-active xray)"
-                    echo "Nginx : $(systemctl is-active nginx)"
-                    echo "Cron  : $(systemctl is-active cron)"
+                    echo "[1/4] Refresh domain, SSL, dan Nginx..."
+                    echo
+
+                    DOMAIN="$(get_domain)"
+
+                    if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "-" ]; then
+                        echo "[ERROR] Domain tidak ditemukan."
+                    else
+                        RECOVERY_MODE=1 \
+                        DOMAIN="$DOMAIN" \
+                        bash "$BASE/bin/setup-stack.sh"
+
+                        echo
+                        echo "[2/4] Validasi Xray..."
+                        if xray run -test -config /usr/local/etc/xray/config.json >/dev/null 2>&1; then
+                            echo "[OK] Konfigurasi Xray valid."
+                        else
+                            echo "[ERROR] Konfigurasi Xray tidak valid."
+                        fi
+
+                        echo
+                        echo "[3/4] Restart service..."
+                        systemctl restart xray
+                        systemctl restart nginx
+                        systemctl restart cron
+
+                        echo
+                        echo "[4/4] Status service:"
+                        echo
+                        echo "Xray  : $(systemctl is-active xray)"
+                        echo "Nginx : $(systemctl is-active nginx)"
+                        echo "Cron  : $(systemctl is-active cron)"
+                    fi
+
+                    echo
+                    echo "================================================"
+                    echo "             REFRESH SELESAI"
+                    echo "================================================"
                     echo
                     read -rp "Tekan Enter..."
                     ;;
