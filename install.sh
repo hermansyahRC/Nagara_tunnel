@@ -4,6 +4,7 @@ set -Eeuo pipefail
 
 APP_NAME="Nagara Tunnel"
 APP_DIR="/opt/nagara-tunnel"
+RECOVERY_MODE=0
 
 # ==================================================
 # GITHUB SOURCE
