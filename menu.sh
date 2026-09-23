@@ -352,31 +352,51 @@ while true; do
                     echo "           REFRESH / RESTART SEMUA"
                     echo "================================================"
                     echo
-                    echo "[1/4] Refresh domain, SSL, dan Nginx..."
-                    echo
 
                     DOMAIN="$(get_domain)"
+                    REFRESH_OK=true
 
                     if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "-" ]; then
                         echo "[ERROR] Domain tidak ditemukan."
+                        REFRESH_OK=false
                     else
-                        RECOVERY_MODE=1 \
+                        echo "[1/4] Refresh domain, SSL, dan Nginx..."
+                        echo
+
+                        if RECOVERY_MODE=1 \
                         DOMAIN="$DOMAIN" \
-                        bash "$BASE/bin/setup-stack.sh"
+                        bash "$BASE/bin/setup-stack.sh"; then
+                            echo
+                            echo "[OK] Refresh domain, SSL, dan Nginx berhasil."
+                        else
+                            echo
+                            echo "[ERROR] Refresh domain, SSL, dan Nginx gagal."
+                            REFRESH_OK=false
+                        fi
 
                         echo
                         echo "[2/4] Validasi Xray..."
+
                         if xray run -test -config /usr/local/etc/xray/config.json >/dev/null 2>&1; then
                             echo "[OK] Konfigurasi Xray valid."
                         else
                             echo "[ERROR] Konfigurasi Xray tidak valid."
+                            REFRESH_OK=false
                         fi
 
-                        echo
-                        echo "[3/4] Restart service..."
-                        systemctl restart xray
-                        systemctl restart nginx
-                        systemctl restart cron
+                        if [ "$REFRESH_OK" = true ]; then
+                            echo
+                            echo "[3/4] Restart service..."
+
+                            systemctl restart xray
+                            systemctl restart nginx
+                            systemctl restart cron
+
+                            echo "[OK] Semua service berhasil direstart."
+                        else
+                            echo
+                            echo "[3/4] Restart service dilewati karena ada error."
+                        fi
 
                         echo
                         echo "[4/4] Status service:"
@@ -387,12 +407,23 @@ while true; do
                     fi
 
                     echo
-                    echo "================================================"
-                    echo "             REFRESH SELESAI"
-                    echo "================================================"
+
+                    if [ "$REFRESH_OK" = true ]; then
+                        echo "================================================"
+                        echo "             REFRESH SELESAI"
+                        echo "================================================"
+                    else
+                        echo "================================================"
+                        echo "             REFRESH GAGAL"
+                        echo "================================================"
+                        echo
+                        echo "Periksa pesan ERROR di atas."
+                    fi
+
                     echo
                     read -rp "Tekan Enter..."
                     ;;
+
 
                 9)
                     journalctl -u xray -n 50 --no-pager
@@ -561,7 +592,7 @@ while true; do
 
                     read -rp "Tekan Enter..."
                     ;;
-			
+
 		 4)
 
                     clear
