@@ -222,6 +222,7 @@ draw_dashboard() {
     printf "  ${WHITE}[ 4 ]${RESET} Trojan Manager        ${WHITE}[10 ]${RESET} Server Settings\n"
     printf "  ${WHITE}[ 5 ]${RESET} Connection Monitor    ${WHITE}[11 ]${RESET} Security & Firewall\n"
     printf "  ${WHITE}[ 6 ]${RESET} Service Manager       ${WHITE}[12 ]${RESET} System Tools\n"
+    printf "  ${WHITE}[13 ]${RESET} Domain & SSL Manager\n"
     echo
     printf "                         ${WHITE}[ 0 ]${RESET} Exit\n"
 
@@ -722,6 +723,11 @@ while true; do
         0|exit|EXIT|Exit|q|Q)
             clear
             exit 0
+            ;;
+
+        13)
+            clear
+            "$BASE/bin/domain-ssl-manager.sh"
             ;;
 
         *)
